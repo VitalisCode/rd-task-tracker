@@ -1,0 +1,100 @@
+replicas: 1
+
+# Auto-provision Loki as a datasource on startup
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        url: http://loki:3100
+        access: proxy
+        isDefault: true
+        jsonData:
+          maxLines: 1000
+
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server:9090
+        access: proxy
+
+persistence:
+  enabled: true
+  size: 5Gi
+
+# Auto-provision our custom dashboard
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: default
+        orgId: 1
+        folder: "R&D Tracker"
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+dashboardsConfigMaps:
+  default: grafana-dashboards
+
+# Admin credentials — use Vault in real life
+adminUser: admin
+adminPassword: admin123   # override with vault secret in production
+
+grafana.ini:
+  server:
+    root_url: http://localhost:3000
+  log:
+    mode: console
+    level: info
+  analytics:
+    reporting_enabled: false
+
+alerting:
+  rules.yaml:
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: rd-tracker-alerts
+        folder: R&D Tracker
+        interval: 1m
+        rules:
+          - uid: high-error-rate
+            title: High error rate
+            condition: C
+            data:
+              - refId: A
+                queryType: ''
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  expr: 'sum(rate({namespace="rd-staging",level="ERROR"}[5m]))'
+                  refId: A
+              - refId: C
+                queryType: ''
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0.1]   # alert if > 0.1 errors/sec
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        type: last
+                  refId: C
+            noDataState: NoData
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "High error rate in rd-staging"
+              description: "Error rate exceeded 0.1/sec for 2 minutes"
+            labels:
+              severity: warning

@@ -1,0 +1,173 @@
+name: R&D Task Tracker CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+
+env:
+  ACR_NAME: youracrname
+  ACR_LOGIN_SERVER: youracrname.azurecr.io
+
+  API_IMAGE: youracrname.azurecr.io/rd-task-tracker/api
+  FRONTEND_IMAGE: youracrname.azurecr.io/rd-task-tracker/frontend
+
+jobs:
+
+  # ══════════════════════════════════════════════════════════════
+  # VALIDATE
+  # ══════════════════════════════════════════════════════════════
+
+  lint-python:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install ruff
+
+      - run: ruff check services/api/
+
+  # ══════════════════════════════════════════════════════════════
+  # TEST
+  # ══════════════════════════════════════════════════════════════
+
+  test-api:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: services/api
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov "httpx<0.28"
+
+      - name: Run tests
+        working-directory: services/api
+        run: |
+          if [ -d tests ]; then
+            pytest tests/ -v --tb=short --cov=. --cov-report=xml:coverage.xml
+          else
+            python -m py_compile main.py
+          fi
+
+  # ══════════════════════════════════════════════════════════════
+  # BUILD API
+  # ══════════════════════════════════════════════════════════════
+
+  build-api:
+    runs-on: ubuntu-latest
+    needs:
+      - lint-python
+      - test-api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Azure Login
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # ACR Login
+      - name: Login to Azure Container Registry
+        run: |
+          az acr login --name $ACR_NAME
+
+      - name: Build API Image
+        run: |
+          docker build \
+            --target production \
+            --tag $API_IMAGE:${GITHUB_SHA::8} \
+            --tag $API_IMAGE:latest \
+            services/api/
+
+      - name: Push API Image
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker push $API_IMAGE:${GITHUB_SHA::8}
+          docker push $API_IMAGE:latest
+
+  # ══════════════════════════════════════════════════════════════
+  # BUILD FRONTEND
+  # ══════════════════════════════════════════════════════════════
+
+  build-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Azure Container Registry
+        run: |
+          az acr login --name $ACR_NAME
+
+      - name: Build Frontend Image
+        run: |
+          docker build \
+            --target production \
+            --tag $FRONTEND_IMAGE:${GITHUB_SHA::8} \
+            --tag $FRONTEND_IMAGE:latest \
+            services/frontend/
+
+      - name: Push Frontend Image
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker push $FRONTEND_IMAGE:${GITHUB_SHA::8}
+          docker push $FRONTEND_IMAGE:latest
+
+  # ══════════════════════════════════════════════════════════════
+  # DEPLOY
+  # ══════════════════════════════════════════════════════════════
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs:
+      - build-api
+      - build-frontend
+
+    if: github.ref == 'refs/heads/main'
+
+    environment:
+      name: staging
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PUSH_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Update Helm Image Tags
+        run: |
+          sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/api/values.yaml
+          sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/frontend/values.yaml
+
+          git add helm/
+
+          git diff --cached --quiet && exit 0
+
+          git commit -m "ci: update image tags to ${GITHUB_SHA::8}"
+
+          git push origin HEAD:main

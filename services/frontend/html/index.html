@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>R&D Task Tracker</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    h1 { color: #2c3e50; }
+    #task-form { display: flex; gap: 10px; margin-bottom: 20px; }
+    #task-form input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .task { padding: 12px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 8px; }
+    .status { font-size: 0.8em; padding: 2px 8px; border-radius: 10px; background: #eaf4fb; }
+  </style>
+</head>
+<body>
+  <h1>📋 R&D Task Tracker</h1>
+
+  <div id="task-form">
+    <input id="title" placeholder="Task title" />
+    <input id="project" placeholder="Project name" />
+    <button onclick="createTask()">Add Task</button>
+  </div>
+
+  <div id="tasks-list"></div>
+
+  <script>
+    const API = window.API_URL || "http://localhost:8000";
+
+    async function loadTasks() {
+      const res = await fetch(`${API}/tasks`);
+      const tasks = await res.json();
+      const container = document.getElementById("tasks-list");
+      container.innerHTML = tasks.length === 0
+        ? "<p>No tasks yet. Add one above!</p>"
+        : tasks.map(t => `
+          <div class="task">
+            <strong>${t.title}</strong>
+            <span class="status">${t.status}</span>
+            <p>${t.description || ""} ${t.project ? `· <em>${t.project}</em>` : ""}</p>
+          </div>`).join("");
+    }
+
+    async function createTask() {
+      const title = document.getElementById("title").value;
+      const project = document.getElementById("project").value;
+      if (!title) return alert("Title is required");
+      await fetch(`${API}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, project, status: "pending" })
+      });
+      document.getElementById("title").value = "";
+      document.getElementById("project").value = "";
+      loadTasks();
+    }
+
+    loadTasks();
+  </script>
+</body>
+</html>

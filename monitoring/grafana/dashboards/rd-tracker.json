@@ -1,0 +1,52 @@
+{
+  "title": "R&D Task Tracker",
+  "uid": "rd-tracker-main",
+  "timezone": "browser",
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Log rate (logs/min)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate({namespace=\"rd-staging\"}[1m])) by (app)",
+          "legendFormat": "{{app}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Error logs",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate({namespace=\"rd-staging\", level=\"ERROR\"}[1m])) by (app)",
+          "legendFormat": "{{app}} errors",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Live logs — API",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 12 },
+      "targets": [
+        {
+          "expr": "{namespace=\"rd-staging\", app=\"rd-api\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}

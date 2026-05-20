@@ -1,0 +1,42 @@
+daemonset:
+  hostNetworking: true
+
+  # Filebeat runs as a DaemonSet — one pod per node
+  # It tails all container logs from /var/log/containers/
+  filebeatConfig:
+    filebeat.yml: |
+      filebeat.autodiscover:
+        providers:
+          - type: kubernetes
+            node: ${NODE_NAME}
+            hints.enabled: true
+            hints.default_config:
+              type: container
+              paths:
+                - /var/log/containers/*${data.kubernetes.container.id}.log
+
+      # Only ship logs from our namespace
+      processors:
+        - add_kubernetes_metadata:
+            host: ${NODE_NAME}
+            matchers:
+              - logs_path:
+                  logs_path: /var/log/containers/
+        - drop_event:
+            when:
+              not:
+                equals:
+                  kubernetes.namespace: rd-staging
+
+      output.logstash:
+        hosts: ["logstash-logstash:5044"]
+
+extraEnvs:
+  - name: NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+
+tolerations:
+  - key: node-role.kubernetes.io/master
+    effect: NoSchedule

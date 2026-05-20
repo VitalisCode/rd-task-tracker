@@ -1,0 +1,40 @@
+image:
+  repository: 986232522384.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/api
+  tag: 055d0046
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+env:
+  - name: APP_ENV
+    value: production
+  - name: LOG_LEVEL
+    value: DEBUG
