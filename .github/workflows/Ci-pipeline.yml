@@ -1,229 +1,232 @@
-name: R&D Task Tracker CI/CD
+# name: R&D Task Tracker CI/CD
 
-on:
-  push:
-    branches:
-      - main
-      - develop
-  pull_request:
+# on:
+#   push:
+#     branches:
+#       - main
+#       - develop
+#   pull_request:
 
-permissions:
-  id-token: write
-  contents: write
+# permissions:
+#   id-token: write
+#   contents: write
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+# env:
+#   AWS_REGION: ${{ secrets.AWS_REGION }}
+#   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+#   ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
 
-  API_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/api
-  FRONTEND_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/frontend
+#   API_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/api
+#   FRONTEND_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/frontend
 
-jobs:
+# jobs:
 
-  # ══════════════════════════════════════════════════════════════
-  # VALIDATE
-  # ══════════════════════════════════════════════════════════════
+#   # ══════════════════════════════════════════════════════════════
+#   # VALIDATE
+#   # ══════════════════════════════════════════════════════════════
+# # 1. Ruff tool for linting and static code analysis to catch potential issues early in the development process, 
+# # ensuring code quality and security best practices are followed.
+# # 2. # Gitleaks is a tool for scanning Git repositories for secrets and sensitive information. 
+#   validate:
+#     runs-on: ubuntu-latest
 
-  validate:
-    runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
 
-    steps:
-      - uses: actions/checkout@v4
+#       - uses: actions/setup-python@v5 
+#         with:
+#           python-version: "3.11"
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+#       - run: pip install ruff # Ruff is a tool for Python code quality and style.
 
-      - run: pip install ruff
+#       - run: ruff check services/api/
 
-      - run: ruff check services/api/
+#       - name: Scan for secrets, PII, and sensitive data 
+#         uses: zricethezav/gitleaks-action@v2 
+#         with:
+#           args: --path=. --verbose
 
-      - name: Scan for secrets, PII, and sensitive data
-        uses: zricethezav/gitleaks-action@v2
-        with:
-          args: --path=. --verbose
+#   # ══════════════════════════════════════════════════════════════
+#   # TEST
+#   # ══════════════════════════════════════════════════════════════
+# # Running tests with pytest to ensure that the API service functions as expected and to catch any issues before they reach production.
+# # pytest is a tool for testing Python applications.
+#   test:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - validate
 
-  # ══════════════════════════════════════════════════════════════
-  # TEST
-  # ══════════════════════════════════════════════════════════════
+#     steps:
+#       - uses: actions/checkout@v4
 
-  test:
-    runs-on: ubuntu-latest
-    needs:
-      - validate
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.11"
 
-    steps:
-      - uses: actions/checkout@v4
+#       - name: Install dependencies
+#         working-directory: services/api
+#         run: |
+#           pip install -r requirements.txt
+#           pip install pytest pytest-cov "httpx<0.28"
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+#       - name: Run tests
+#         working-directory: services/api
+#         run: |
+#           if [ -d tests ]; then
+#             pytest tests/ -v --tb=short --cov=. --cov-report=xml:coverage.xml
+#           else
+#             python -m py_compile main.py
+#           fi
 
-      - name: Install dependencies
-        working-directory: services/api
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-cov "httpx<0.28"
+#       - name: Build frontend test image
+#         working-directory: services/frontend
+#         run: |
+#           docker build --target builder -t rd-task-tracker-frontend-test .
 
-      - name: Run tests
-        working-directory: services/api
-        run: |
-          if [ -d tests ]; then
-            pytest tests/ -v --tb=short --cov=. --cov-report=xml:coverage.xml
-          else
-            python -m py_compile main.py
-          fi
+#   # ══════════════════════════════════════════════════════════════
+#   # API BUILD + SCAN + PUSH
+#   # ══════════════════════════════════════════════════════════════
 
-      - name: Build frontend test image
-        working-directory: services/frontend
-        run: |
-          docker build --target builder -t rd-task-tracker-frontend-test .
+#   build-scan-push-api:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - test
 
-  # ══════════════════════════════════════════════════════════════
-  # API BUILD + SCAN + PUSH
-  # ══════════════════════════════════════════════════════════════
+#     if: github.ref == 'refs/heads/main'
 
-  build-scan-push-api:
-    runs-on: ubuntu-latest
-    needs:
-      - test
+#     steps:
+#       - name: Checkout Source
+#         uses: actions/checkout@v4
 
-    if: github.ref == 'refs/heads/main'
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v2
+#         with:
+#           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+#           aws-region: ${{ env.AWS_REGION }}
+#           role-session-name: github-actions
 
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
+#       - name: Login to Amazon ECR
+#         run: |
+#           aws ecr get-login-password --region $AWS_REGION | \
+#           docker login \
+#           --username AWS \
+#           --password-stdin \
+#           ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions
+#       - name: Set Image Tag
+#         run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
 
-      - name: Login to Amazon ECR
-        run: |
-          aws ecr get-login-password --region $AWS_REGION | \
-          docker login \
-          --username AWS \
-          --password-stdin \
-          ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+#       - name: Build API Docker Image
+#         run: |
+#           docker build \
+#             --target production \
+#             -t $API_IMAGE:$SHORT_SHA \
+#             -t $API_IMAGE:latest \
+#             services/api/
 
-      - name: Set Image Tag
-        run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+#       - name: Scan API Image with Trivy
+#         continue-on-error: true
+#         uses: aquasecurity/trivy-action@v0.36.0
+#         with:
+#           image-ref: ${{ env.API_IMAGE }}:${{ env.SHORT_SHA }}
+#           format: table
+#           severity: HIGH,CRITICAL
+#           exit-code: 1
 
-      - name: Build API Docker Image
-        run: |
-          docker build \
-            --target production \
-            -t $API_IMAGE:$SHORT_SHA \
-            -t $API_IMAGE:latest \
-            services/api/
+#       - name: Push API Image
+#         run: |
+#           docker push $API_IMAGE:$SHORT_SHA
+#           docker push $API_IMAGE:latest
 
-      - name: Scan API Image with Trivy
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.API_IMAGE }}:${{ env.SHORT_SHA }}
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: 1
+#   # ══════════════════════════════════════════════════════════════
+#   # FRONTEND BUILD + SCAN + PUSH
+#   # ══════════════════════════════════════════════════════════════
 
-      - name: Push API Image
-        run: |
-          docker push $API_IMAGE:$SHORT_SHA
-          docker push $API_IMAGE:latest
+#   build-scan-push-frontend:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - test
 
-  # ══════════════════════════════════════════════════════════════
-  # FRONTEND BUILD + SCAN + PUSH
-  # ══════════════════════════════════════════════════════════════
+#     if: github.ref == 'refs/heads/main'
 
-  build-scan-push-frontend:
-    runs-on: ubuntu-latest
-    needs:
-      - test
+#     steps:
+#       - name: Checkout Source
+#         uses: actions/checkout@v4
 
-    if: github.ref == 'refs/heads/main'
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v2
+#         with:
+#           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+#           aws-region: ${{ env.AWS_REGION }}
+#           role-session-name: github-actions
 
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
+#       - name: Login to Amazon ECR
+#         run: |
+#           aws ecr get-login-password --region $AWS_REGION | \
+#           docker login \
+#           --username AWS \
+#           --password-stdin \
+#           ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions
+#       - name: Set Image Tag
+#         run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
 
-      - name: Login to Amazon ECR
-        run: |
-          aws ecr get-login-password --region $AWS_REGION | \
-          docker login \
-          --username AWS \
-          --password-stdin \
-          ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+#       - name: Build Frontend Docker Image
+#         run: |
+#           docker build \
+#             --target production \
+#             -t $FRONTEND_IMAGE:$SHORT_SHA \
+#             -t $FRONTEND_IMAGE:latest \
+#             services/frontend/
 
-      - name: Set Image Tag
-        run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+#       - name: Scan Frontend Image with Trivy
+#         continue-on-error: true
+#         uses: aquasecurity/trivy-action@v0.36.0
+#         with:
+#           image-ref: ${{ env.FRONTEND_IMAGE }}:${{ env.SHORT_SHA }}
+#           format: table
+#           severity: HIGH,CRITICAL
+#           exit-code: 1
 
-      - name: Build Frontend Docker Image
-        run: |
-          docker build \
-            --target production \
-            -t $FRONTEND_IMAGE:$SHORT_SHA \
-            -t $FRONTEND_IMAGE:latest \
-            services/frontend/
+#       - name: Push Frontend Image
+#         run: |
+#           docker push $FRONTEND_IMAGE:$SHORT_SHA
+#           docker push $FRONTEND_IMAGE:latest
 
-      - name: Scan Frontend Image with Trivy
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.FRONTEND_IMAGE }}:${{ env.SHORT_SHA }}
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: 1
+#   # ══════════════════════════════════════════════════════
+#   # DEPLOY
+#   # ══════════════════════════════════════════════════════════════
 
-      - name: Push Frontend Image
-        run: |
-          docker push $FRONTEND_IMAGE:$SHORT_SHA
-          docker push $FRONTEND_IMAGE:latest
+#   deploy-staging:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - build-scan-push-api
+#       - build-scan-push-frontend
 
-  # ══════════════════════════════════════════════════════
-  # DEPLOY
-  # ══════════════════════════════════════════════════════════════
+#     if: github.ref == 'refs/heads/main'
 
-  deploy-staging:
-    runs-on: ubuntu-latest
-    needs:
-      - build-scan-push-api
-      - build-scan-push-frontend
+#     environment:
+#       name: staging
 
-    if: github.ref == 'refs/heads/main'
+#     steps:
+#       - uses: actions/checkout@v4
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
 
-    environment:
-      name: staging
+#       - name: Configure Git
+#         run: |
+#           git config user.email "github-actions@github.com"
+#           git config user.name "GitHub Actions"
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Update Helm Image Tags
+#         run: |
+#           sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/api/values.yaml
+#           sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/frontend/values.yaml
 
-      - name: Configure Git
-        run: |
-          git config user.email "github-actions@github.com"
-          git config user.name "GitHub Actions"
+#           git add helm/
 
-      - name: Update Helm Image Tags
-        run: |
-          sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/api/values.yaml
-          sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/frontend/values.yaml
+#           git diff --cached --quiet && exit 0
 
-          git add helm/
+#           git commit -m "ci: update image tags to ${GITHUB_SHA::8}"
 
-          git diff --cached --quiet && exit 0
-
-          git commit -m "ci: update image tags to ${GITHUB_SHA::8}"
-
-          git push origin HEAD:main
+#           git push origin HEAD:main
