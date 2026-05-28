@@ -8,11 +8,12 @@ on:
   pull_request:
 
 env:
-  ACR_NAME: youracrname
-  ACR_LOGIN_SERVER: youracrname.azurecr.io
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
 
-  API_IMAGE: youracrname.azurecr.io/rd-task-tracker/api
-  FRONTEND_IMAGE: youracrname.azurecr.io/rd-task-tracker/frontend
+  API_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/api
+  FRONTEND_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/frontend
 
 jobs:
 
@@ -76,16 +77,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Azure Login
-      - name: Login to Azure
-        uses: azure/login@v2
+      # AWS OIDC Login
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions
 
-      # ACR Login
-      - name: Login to Azure Container Registry
+      - name: Login to Amazon ECR
         run: |
-          az acr login --name $ACR_NAME
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
       - name: Build API Image
         run: |
@@ -111,14 +113,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to Azure
-        uses: azure/login@v2
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions
 
-      - name: Login to Azure Container Registry
+      - name: Login to Amazon ECR
         run: |
-          az acr login --name $ACR_NAME
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
       - name: Build Frontend Image
         run: |

@@ -44,11 +44,22 @@ curl http://localhost:8000/tasks
 open http://localhost:8080   # or visit in browser
 
 ===============================================
-Set up AWS ECR repositories first
-# Set your region
-export AWS_REGION=eu-central-1   # Frankfurt — close to Munich HQ
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+# AWS CLI login
+# Option 1: configure AWS credentials interactively
+aws configure
 
+# Option 2: set credentials from environment variables
+export AWS_ACCESS_KEY_ID="YOUR_AWS_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="YOUR_AWS_SECRET_ACCESS_KEY"
+export AWS_REGION=eu-central-1
+
+# If you have temporary credentials, also set:
+export AWS_SESSION_TOKEN="YOUR_AWS_SESSION_TOKEN"
+
+# Validate AWS CLI login
+aws sts get-caller-identity --query Account --output text
+
+Set up AWS ECR repositories first
 # Create ECR repos
 aws ecr create-repository \
   --repository-name rd-task-tracker/api \
