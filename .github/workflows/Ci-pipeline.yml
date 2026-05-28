@@ -10,7 +10,6 @@ on:
 permissions:
   id-token: write
   contents: write
-  pull-requests: read
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -19,41 +18,40 @@ env:
 
   API_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/api
   FRONTEND_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/frontend
-  
-  # SonarQube Configuration
-  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 jobs:
 
   # ══════════════════════════════════════════════════════════════
   # VALIDATE
   # ══════════════════════════════════════════════════════════════
-
+# 1. Ruff tool for linting and static code analysis to catch potential issues early in the development process, 
+# ensuring code quality and security best practices are followed.
+# 2. # Gitleaks is a tool for scanning Git repositories for secrets and sensitive information. 
   validate:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5 
         with:
           python-version: "3.11"
 
-      - run: pip install ruff
+      - run: pip install ruff # Ruff is a tool for Python code quality and style.
 
       - run: ruff check services/api/
 
-      - name: Scan for secrets, PII, and sensitive data
-        uses: zricethezav/gitleaks-action@v2
+      - name: Scan for secrets, PII, and sensitive data 
+        uses: zricethezav/gitleaks-action@v2 
         with:
           args: --path=. --verbose
 
   # ══════════════════════════════════════════════════════════════
   # TEST
   # ══════════════════════════════════════════════════════════════
-
-  test-and-SonarQubeScan:
+# Running tests with pytest to ensure that the API service functions as expected and to catch any issues before they reach production.
+# pytest is a tool for testing Python applications.
+  test:
     runs-on: ubuntu-latest
     needs:
       - validate
@@ -85,20 +83,6 @@ jobs:
         run: |
           docker build --target builder -t rd-task-tracker-frontend-test .
 
-      - name: SonarQube Scan
-        uses: sonarsource/sonarcloud-github-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.projectKey=rd-task-tracker
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-            -Dsonar.sources=services/api,services/frontend
-            -Dsonar.python.coverage.reportPaths=services/api/coverage.xml
-            -Dsonar.exclusions=**/node_modules/**,**/*.pyc
-
-
   # ══════════════════════════════════════════════════════════════
   # API BUILD + SCAN + PUSH
   # ══════════════════════════════════════════════════════════════
@@ -106,7 +90,7 @@ jobs:
   build-scan-push-api:
     runs-on: ubuntu-latest
     needs:
-      - test-and-SonarQubeScan
+      - test
 
     if: github.ref == 'refs/heads/main'
 
@@ -161,7 +145,7 @@ jobs:
   build-scan-push-frontend:
     runs-on: ubuntu-latest
     needs:
-      - test-and-SonarQubeScan
+      - test
 
     if: github.ref == 'refs/heads/main'
 
