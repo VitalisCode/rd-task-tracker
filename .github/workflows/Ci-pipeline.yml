@@ -1,3 +1,4 @@
+```yaml
 name: R&D Task Tracker CI/CD
 
 on:
@@ -5,6 +6,7 @@ on:
     branches:
       - main
       - develop
+
   pull_request:
 
 permissions:
@@ -29,15 +31,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: pip install ruff
+      - name: Install Ruff
+        run: pip install ruff
 
-      - run: ruff check services/api/
+      - name: Run Lint Check
+        run: ruff check services/api/
+
+      - name: Scan for Secrets
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          args: --path=. --verbose
 
   # ══════════════════════════════════════════════════════════════
   # TEST
@@ -49,19 +60,21 @@ jobs:
       - validate
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install Backend Dependencies
         working-directory: services/api
         run: |
           pip install -r requirements.txt
           pip install pytest pytest-cov "httpx<0.28"
 
-      - name: Run tests
+      - name: Run Backend Tests
         working-directory: services/api
         run: |
           if [ -d tests ]; then
@@ -70,145 +83,84 @@ jobs:
             python -m py_compile main.py
           fi
 
-      - name: Build frontend test image
+      - name: Build Frontend Test Image
         working-directory: services/frontend
         run: |
-          docker build --target builder -t rd-task-tracker-frontend-test .
+          docker build \
+            --target builder \
+            -t rd-task-tracker-frontend-test .
 
   # ══════════════════════════════════════════════════════════════
-  # BUILD API
+  # API BUILD + SCAN + PUSH
   # ══════════════════════════════════════════════════════════════
 
-  build-api:
+  build-scan-push-api:
     runs-on: ubuntu-latest
     needs:
       - test
 
-    steps:
-      - uses: actions/checkout@v4
+    if: github.ref == 'refs/heads/main'
 
-      # AWS OIDC Login
-      - name: Configure AWS credentials via OIDC
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions
 
-      - name: Build API Image
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | \
+          docker login \
+          --username AWS \
+          --password-stdin \
+          ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+      - name: Set Image Tag
+        run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+
+      - name: Build API Docker Image
         run: |
           docker build \
             --target production \
-            --tag $API_IMAGE:${GITHUB_SHA::8} \
-            --tag $API_IMAGE:latest \
+            -t $API_IMAGE:$SHORT_SHA \
+            -t $API_IMAGE:latest \
             services/api/
-
-  # ══════════════════════════════════════════════════════
-  # BUILD FRONTEND
-  # ══════════════════════════════════════════════════════════════
-
-  build-frontend:
-    runs-on: ubuntu-latest
-    needs:
-      - test
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions
-
-      - name: Build Frontend Image
-        run: |
-          docker build \
-            --target production \
-            --tag $FRONTEND_IMAGE:${GITHUB_SHA::8} \
-            --tag $FRONTEND_IMAGE:latest \
-            services/frontend/
-
-  # ══════════════════════════════════════════════════════════════
-  # SCAN
-  # ══════════════════════════════════════════════════════
-
-  scan-api:
-    runs-on: ubuntu-latest
-    needs:
-      - build-api
-
-    steps:
-      - uses: actions/checkout@v4
 
       - name: Scan API Image with Trivy
         continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.10.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          image: ${{ env.API_IMAGE }}:${{ github.sha }}
+          image-ref: ${{ env.API_IMAGE }}:${{ env.SHORT_SHA }}
           format: table
           severity: HIGH,CRITICAL
           exit-code: 1
-
-  scan-frontend:
-    runs-on: ubuntu-latest
-    needs:
-      - build-frontend
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Scan Frontend Image with Trivy
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.10.0
-        with:
-          image: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: 1
-
-  # ══════════════════════════════════════════════════════
-  # PUSH
-  # ══════════════════════════════════════════════════════
-
-  push-api:
-    runs-on: ubuntu-latest
-    needs:
-      - scan-api
-
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions
-
-      - name: Login to Amazon ECR
-        run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
       - name: Push API Image
         run: |
-          docker push $API_IMAGE:${GITHUB_SHA::8}
+          docker push $API_IMAGE:$SHORT_SHA
           docker push $API_IMAGE:latest
 
-  push-frontend:
+  # ══════════════════════════════════════════════════════════════
+  # FRONTEND BUILD + SCAN + PUSH
+  # ══════════════════════════════════════════════════════════════
+
+  build-scan-push-frontend:
     runs-on: ubuntu-latest
     needs:
-      - scan-frontend
+      - test
 
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials via OIDC
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -217,22 +169,47 @@ jobs:
 
       - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+          aws ecr get-login-password --region $AWS_REGION | \
+          docker login \
+          --username AWS \
+          --password-stdin \
+          ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+      - name: Set Image Tag
+        run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+
+      - name: Build Frontend Docker Image
+        run: |
+          docker build \
+            --target production \
+            -t $FRONTEND_IMAGE:$SHORT_SHA \
+            -t $FRONTEND_IMAGE:latest \
+            services/frontend/
+
+      - name: Scan Frontend Image with Trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.FRONTEND_IMAGE }}:${{ env.SHORT_SHA }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 1
 
       - name: Push Frontend Image
         run: |
-          docker push $FRONTEND_IMAGE:${GITHUB_SHA::8}
+          docker push $FRONTEND_IMAGE:$SHORT_SHA
           docker push $FRONTEND_IMAGE:latest
 
-  # ══════════════════════════════════════════════════════
+  # ══════════════════════════════════════════════════════════════
   # DEPLOY
   # ══════════════════════════════════════════════════════════════
 
   deploy-staging:
     runs-on: ubuntu-latest
+
     needs:
-      - push-api
-      - push-frontend
+      - build-scan-push-api
+      - build-scan-push-frontend
 
     if: github.ref == 'refs/heads/main'
 
@@ -240,9 +217,13 @@ jobs:
       name: staging
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Image Tag
+        run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
 
       - name: Configure Git
         run: |
@@ -251,13 +232,13 @@ jobs:
 
       - name: Update Helm Image Tags
         run: |
-          sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/api/values.yaml
-          sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/frontend/values.yaml
+          sed -i "s/tag:.*/tag: $SHORT_SHA/" helm/api/values.yaml
+          sed -i "s/tag:.*/tag: $SHORT_SHA/" helm/frontend/values.yaml
 
           git add helm/
 
           git diff --cached --quiet && exit 0
 
-          git commit -m "ci: update image tags to ${GITHUB_SHA::8}"
+          git commit -m "ci: update image tags to $SHORT_SHA"
 
           git push origin HEAD:main
