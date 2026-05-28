@@ -144,7 +144,7 @@ jobs:
 
       - name: Scan API Image with Trivy
         continue-on-error: true
-        uses: aquasec/trivy-action@v0.10.0
+        uses: aquasecurity/trivy-action@v0.10.0
         with:
           image: ${{ env.API_IMAGE }}:${{ github.sha }}
           format: table
@@ -161,7 +161,7 @@ jobs:
 
       - name: Scan Frontend Image with Trivy
         continue-on-error: true
-        uses: aquasec/trivy-action@v0.10.0
+        uses: aquasecurity/trivy-action@v0.10.0
         with:
           image: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           format: table
