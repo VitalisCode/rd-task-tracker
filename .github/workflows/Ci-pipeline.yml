@@ -24,33 +24,30 @@ jobs:
   # ══════════════════════════════════════════════════════════════
   # VALIDATE
   # ══════════════════════════════════════════════════════════════
-# 1. Ruff tool for linting and static code analysis to catch potential issues early in the development process, 
-# ensuring code quality and security best practices are followed.
-# 2. # Gitleaks is a tool for scanning Git repositories for secrets and sensitive information. 
+
   validate:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5 
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: pip install ruff # Ruff is a tool for Python code quality and style.
+      - run: pip install ruff
 
       - run: ruff check services/api/
 
-      - name: Scan for secrets, PII, and sensitive data 
-        uses: zricethezav/gitleaks-action@v2 
+      - name: Scan for secrets, PII, and sensitive data
+        uses: zricethezav/gitleaks-action@v2
         with:
           args: --path=. --verbose
 
   # ══════════════════════════════════════════════════════════════
   # TEST
   # ══════════════════════════════════════════════════════════════
-# Running tests with pytest to ensure that the API service functions as expected and to catch any issues before they reach production.
-# pytest is a tool for testing Python applications.
+
   test:
     runs-on: ubuntu-latest
     needs:
@@ -193,8 +190,8 @@ jobs:
           docker push $FRONTEND_IMAGE:$SHORT_SHA
           docker push $FRONTEND_IMAGE:latest
 
-  # ══════════════════════════════════════════════════
-  # DEPLOY STAGING
+  # ══════════════════════════════════════════════════════
+  # DEPLOY
   # ══════════════════════════════════════════════════════════════
 
   deploy-staging:
@@ -230,53 +227,3 @@ jobs:
           git commit -m "ci: update image tags to ${GITHUB_SHA::8}"
 
           git push origin HEAD:main
-
-  # ══════════════════════════════════════════════════════════════
-  # DEPLOY PRODUCTION
-  # ══════════════════════════════════════════════════════════════
-
-  deploy-production:
-    runs-on: ubuntu-latest
-    needs:
-      - build-scan-push-api
-      - build-scan-push-frontend
-
-    if: github.ref == 'refs/heads/main'
-
-    environment:
-      name: production
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions
-
-
-      - name: Deploy to Production via Helm
-        run: |
-          helm repo add rd-tracker https://charts.example.com/rd-tracker || true
-          helm repo update
-          
-          helm upgrade --install rd-api rd-tracker/api \
-            --namespace rd-production \
-            --create-namespace \
-            --values helm/api/values.yaml \
-            --set image.tag=${GITHUB_SHA::8}
-          
-          helm upgrade --install rd-frontend rd-tracker/frontend \
-            --namespace rd-production \
-            --create-namespace \
-            --values helm/frontend/values.yaml \
-            --set image.tag=${GITHUB_SHA::8}
-
-      - name: Verify Production Deployment
-        run: |
-          kubectl rollout status deployment/rd-api -n rd-production --timeout=5m
-          kubectl rollout status deployment/rd-frontend -n rd-production --timeout=5m
