@@ -1,0 +1,7 @@
+replicaCount: 1
+
+image:
+  tag: 8d9a2bc
+
+env:
+  ENVIRONMENT: staging

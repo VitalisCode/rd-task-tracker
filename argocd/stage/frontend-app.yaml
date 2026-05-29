@@ -1,35 +1,31 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: rd-api
+  name: rd-frontend
   namespace: argocd
-  # Auto-delete resources when app is deleted
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
 
-  # Where to pull the config from — YOUR GitLab repo
   source:
-    repoURL: https://gitlab.com/vitaliscode/rd-task-tracker.git
+    repoURL: https://github.com/vitaliscode/rd-task-tracker.git
     targetRevision: main
-    path: helm/api
+    path: helm/frontend
     helm:
       valueFiles:
-        - values.yaml
+        - values-stage.yaml
 
-  # Where to deploy to
   destination:
     server: https://kubernetes.default.svc
     namespace: rd-staging
 
   syncPolicy:
     automated:
-      prune: true        # Remove resources deleted from git
-      selfHeal: true     # Revert any manual kubectl changes
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - PrunePropagationPolicy=foreground
     retry:
       limit: 3
       backoff:

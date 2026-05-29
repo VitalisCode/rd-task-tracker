@@ -9,16 +9,16 @@ spec:
   project: default
 
   source:
-    repoURL: https://gitlab.com/vitaliscode/rd-task-tracker.git
+    repoURL: https://github.com/vitaliscode/rd-task-tracker.git
     targetRevision: main
     path: helm/frontend
     helm:
       valueFiles:
-        - values.yaml
+        - values-prod.yaml
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: rd-staging
+    namespace: rd-production
 
   syncPolicy:
     automated:

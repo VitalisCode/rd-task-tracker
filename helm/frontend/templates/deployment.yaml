@@ -5,23 +5,38 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "rd-frontend.labels" . | nindent 4 }}
+
 spec:
   replicas: {{ .Values.replicaCount }}
+
   selector:
     matchLabels:
       {{- include "rd-frontend.selectorLabels" . | nindent 6 }}
+
   template:
     metadata:
       labels:
         {{- include "rd-frontend.selectorLabels" . | nindent 8 }}
+
     spec:
       containers:
         - name: frontend
+
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
-            - containerPort: {{ .Values.service.targetPort }}
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+
+          {{- if .Values.env }}
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+          {{- end }}
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
@@ -29,13 +44,17 @@ spec:
           livenessProbe:
             httpGet:
               path: {{ .Values.probes.liveness.path }}
-              port: {{ .Values.service.targetPort }}
+              port: http
             initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
-            
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.path }}
-              port: {{ .Values.service.targetPort }}
+              port: http
             initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}

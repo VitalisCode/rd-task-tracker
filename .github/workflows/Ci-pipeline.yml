@@ -218,15 +218,61 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
 
-      - name: Update Helm Image Tags
+      - name: Configure Git
         run: |
-          sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/api/values.yaml
-          sed -i "s/tag:.*/tag: ${GITHUB_SHA::8}/" helm/frontend/values.yaml
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Update Staging Helm Image Tags
+        run: |
+          SHORT_SHA=${GITHUB_SHA::8}
+
+          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-stage.yaml
+          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-stage.yaml
 
           git add helm/
 
           git diff --cached --quiet && exit 0
 
-          git commit -m "ci: update image tags to ${GITHUB_SHA::8}"
+          git commit -m "ci(staging): deploy ${GITHUB_SHA::8}"
+
+          git push origin HEAD:main
+
+          
+##========= Deploying to production only after successful staging deployment and manual approval.===========##
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+
+    needs:
+      - deploy-staging
+
+    if: github.ref == 'refs/heads/main'
+
+    environment:
+      name: prod
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Promote Same Image To Production
+        run: |
+          SHORT_SHA=${GITHUB_SHA::8}
+
+          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-prod.yaml
+          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-prod.yaml
+
+          git add helm/
+
+          git diff --cached --quiet && exit 0
+
+          git commit -m "ci(prod): promote ${SHORT_SHA}"
 
           git push origin HEAD:main

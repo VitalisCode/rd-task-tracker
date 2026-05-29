@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+name: rd-api-prod
+namespace: argocd
+finalizers:
+- resources-finalizer.argocd.argoproj.io
+
+spec:
+project: default
+
+source:
+repoURL: https://github.com/vitaliscode/rd-task-tracker.git
+targetRevision: main
+path: helm/api
+helm:
+valueFiles:
+- values-prod.yaml
+
+destination:
+server: https://kubernetes.default.svc
+namespace: rd-production
+
+syncPolicy:
+automated:
+prune: true
+selfHeal: true
+
+syncOptions:
+  - CreateNamespace=true
+  - PrunePropagationPolicy=foreground
+
+retry:
+  limit: 3
+  backoff:
+    duration: 5s
+    factor: 2
+    maxDuration: 30s

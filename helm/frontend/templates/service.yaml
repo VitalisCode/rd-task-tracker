@@ -5,13 +5,20 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "rd-frontend.labels" . | nindent 4 }}
+
+  {{- with .Values.service.annotations }}
   annotations:
-    {{- toYaml .Values.service.annotations | nindent 4 }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+
 spec:
   type: {{ .Values.service.type }}
+
   selector:
     {{- include "rd-frontend.selectorLabels" . | nindent 4 }}
+
   ports:
-    - port: {{ .Values.service.port }}
+    - name: http
+      port: {{ .Values.service.port }}
       targetPort: {{ .Values.service.targetPort }}
       protocol: TCP

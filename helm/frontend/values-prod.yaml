@@ -1,0 +1,15 @@
+replicaCount: 3
+
+image:
+  tag: 8d9a2bc
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+env:
+  ENVIRONMENT: production

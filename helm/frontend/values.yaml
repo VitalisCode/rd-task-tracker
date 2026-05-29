@@ -1,6 +1,6 @@
 image:
   repository: 986232522384.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/frontend
-  tag: 0a5cdcfe
+  tag: latest
   pullPolicy: IfNotPresent
 
 replicaCount: 1
@@ -9,25 +9,29 @@ service:
   type: LoadBalancer
   port: 80
   targetPort: 8080
+
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
 
-
 resources:
   requests:
-    cpu: 50m
-    memory: 64Mi
-  limits:
-    cpu: 200m
+    cpu: 100m
     memory: 128Mi
-
+  limits:
+    cpu: 300m
+    memory: 256Mi
 
 probes:
   liveness:
-    path: /health
-    initialDelaySeconds: 5
-    periodSeconds: 15
-  readiness:
-    path: /health
-    initialDelaySeconds: 3
+    path: /
+    initialDelaySeconds: 30
     periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readiness:
+    path: /
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 3
