@@ -24,27 +24,37 @@ jobs:
   # ══════════════════════════════════════════════════════════════
   # VALIDATE
   # ══════════════════════════════════════════════════════════════
-# 1. Ruff tool for linting and static code analysis to catch potential issues early in the development process, 
-# ensuring code quality and security best practices are followed.
-# 2. # Gitleaks is a tool for scanning Git repositories for secrets and sensitive information. 
+# Code quality (Ruff)
+# Python security scanning (Bandit)
+# Secret detection (Gitleaks)
   validate:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-python@v5 
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: pip install ruff # Ruff is a tool for Python code quality and style.
+      - name: Install Dependencies
+        run: |
+          pip install ruff bandit
 
-      - run: ruff check services/api/
+      - name: Ruff Lint
+        run: ruff check services/api/
 
-      - name: Scan for secrets, PII, and sensitive data 
-        uses: zricethezav/gitleaks-action@v2 
-        with:
-          args: --path=. --verbose
+      - name: Bandit Security Scan
+        run: bandit -r services/api/
+
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ══════════════════════════════════════════════════════════════
   # TEST
