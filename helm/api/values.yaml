@@ -1,6 +1,6 @@
 image:
   repository: 986232522384.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/api
-  tag: 0a5cdcfe
+  tag: bc9c3420
   pullPolicy: IfNotPresent
 
 replicaCount: 1
