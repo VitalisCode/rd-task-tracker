@@ -28,10 +28,12 @@ jobs:
   build-api:
     needs: test
     uses: ./.github/workflows/build-cscan-push-api.yml
+    secrets: inherit
 
   build-frontend:
     needs: test
     uses: ./.github/workflows/build-cscan-push-front.yml
+    secrets: inherit
 
   deploy-staging:
     needs:
