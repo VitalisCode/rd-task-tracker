@@ -3,13 +3,13 @@ name: Build-Cscan-Push-API
 on:
   workflow_call:
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+# env:
+#   AWS_REGION: ${{ secrets.AWS_REGION }}
+#   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+#   ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
 
-  API_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/api
-  FRONTEND_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/frontend
+#   API_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/api
+#   FRONTEND_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/frontend
 
 jobs:
   build-cscan-push-api:
