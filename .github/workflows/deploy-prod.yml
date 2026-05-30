@@ -7,6 +7,7 @@ jobs:
     ##========= Deploying to production only after successful staging deployment and manual approval.===========##
 
   deploy-prod:
+    name: Deploy to Production
     runs-on: ubuntu-latest
 
     if: github.ref == 'refs/heads/main'

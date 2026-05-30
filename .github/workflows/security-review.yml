@@ -7,6 +7,7 @@ jobs:
   # security-review bandit reports are uploaded as artifacts and 
   # can be reviewed by the security team to ensure that any identified vulnerabilities are addressed before deployment. 
   security-review:
+    name: Await Security Review Approval
     runs-on: ubuntu-latest       
 
     environment:

@@ -8,6 +8,7 @@ jobs:
 # Python security scanning (Bandit)
 # Secret detection (Gitleaks)
   validate:
+    name: Code Quality & Security Checks
     runs-on: ubuntu-latest
 
     steps:

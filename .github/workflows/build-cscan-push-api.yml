@@ -13,6 +13,7 @@ env:
 
 jobs:
   build-cscan-push-api:
+    name: Build, ContainerScan, Push API
     runs-on: ubuntu-latest
 
     if: github.ref == 'refs/heads/main'
