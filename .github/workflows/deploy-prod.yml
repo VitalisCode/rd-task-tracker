@@ -1,0 +1,40 @@
+name: Deploy to Prod
+
+on:
+  workflow_call:
+
+jobs:
+    ##========= Deploying to production only after successful staging deployment and manual approval.===========##
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+
+    if: github.ref == 'refs/heads/main'
+
+    environment:
+      name: prod
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Promote Same Image To Production
+        run: |
+          SHORT_SHA=${GITHUB_SHA::8}
+
+          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-prod.yaml
+          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-prod.yaml
+
+          git add helm/
+
+          git diff --cached --quiet && exit 0
+
+          git commit -m "ci(prod): promote ${SHORT_SHA}"
+
+          git push origin HEAD:main

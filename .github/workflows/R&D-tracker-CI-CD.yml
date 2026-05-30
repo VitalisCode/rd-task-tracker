@@ -1,0 +1,44 @@
+name: R&D Task Tracker CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  pull_request:
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+
+  validate:
+    uses: ./.github/workflows/validate.yml
+
+  security-review:
+    needs: validate
+    uses: ./.github/workflows/security-review.yml
+
+  test:
+    needs: security-review
+    uses: ./.github/workflows/test.yml
+
+  build-api:
+    needs: test
+    uses: ./.github/workflows/build-cscan-push-api.yml
+
+  build-frontend:
+    needs: test
+    uses: ./.github/workflows/build-cscan-push-front.yml
+
+  deploy-staging:
+    needs:
+      - build-api
+      - build-frontend
+    uses: ./.github/workflows/deploy-staging.yml
+
+  deploy-prod:
+    needs: deploy-staging
+    uses: ./.github/workflows/deploy-prod.yml

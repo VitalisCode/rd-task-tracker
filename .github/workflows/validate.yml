@@ -1,0 +1,46 @@
+name: Validate
+
+on:
+  workflow_call:
+
+jobs:
+# Code quality (Ruff)
+# Python security scanning (Bandit)
+# Secret detection (Gitleaks)
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          pip install ruff bandit
+
+      - name: Ruff Lint
+        run: ruff check services/api/
+
+      - name: Bandit Security Scan
+        run: |
+          bandit -r services/api/ \
+            -f json \
+            -o bandit-report.json || true
+
+      - name: Upload Bandit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

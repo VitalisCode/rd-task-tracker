@@ -1,0 +1,312 @@
+# name: R&D Task Tracker CI/CD
+
+# on:
+#   push:
+#     branches:
+#       - main
+#       - develop
+#   pull_request:
+
+# permissions:
+#   id-token: write
+#   contents: write
+
+# env:
+#   AWS_REGION: ${{ secrets.AWS_REGION }}
+#   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+#   ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+
+#   API_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/api
+#   FRONTEND_IMAGE: ${{ secrets.ECR_REGISTRY }}/rd-task-tracker/frontend
+
+# jobs:
+
+#   # ══════════════════════════════════════════════════════════════
+#   # VALIDATE
+#   # ══════════════════════════════════════════════════════════════
+# # Code quality (Ruff)
+# # Python security scanning (Bandit)
+# # Secret detection (Gitleaks)
+#   validate:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout Source
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+
+#       - name: Setup Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.11"
+
+#       - name: Install Dependencies
+#         run: |
+#           pip install ruff bandit
+
+#       - name: Ruff Lint
+#         run: ruff check services/api/
+
+#       - name: Bandit Security Scan
+#         run: |
+#           bandit -r services/api/ \
+#             -f json \
+#             -o bandit-report.json || true
+
+#       - name: Upload Bandit Report
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: bandit-report
+#           path: bandit-report.json
+
+#       - name: Gitleaks Secret Scan
+#         uses: gitleaks/gitleaks-action@v2
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+#   # ══════════════════════════════════════════════════════════════
+#   # security-review bandit reports are uploaded as artifacts and 
+#   # can be reviewed by the security team to ensure that any identified vulnerabilities are addressed before deployment.
+#   # ══════════════════════════════════════════════════════════════          
+#   security-review:
+#     needs: validate
+#     runs-on: ubuntu-latest
+
+#     environment:
+#       name: security-review
+
+#     steps:
+#       - name: Await Approval
+#         run: echo "Security review approved"
+
+#   # ══════════════════════════════════════════════════════════════
+#   # TEST
+#   # ══════════════════════════════════════════════════════════════
+# # Running tests with pytest to ensure that the API service functions as expected and to catch any issues before they reach production.
+# # pytest is a tool for testing Python applications.
+#   test:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - security-review
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.11"
+
+#       - name: Install dependencies
+#         working-directory: services/api
+#         run: |
+#           pip install -r requirements.txt
+#           pip install pytest pytest-cov "httpx<0.28"
+
+#       - name: Run tests
+#         working-directory: services/api
+#         run: |
+#           if [ -d tests ]; then
+#             pytest tests/ -v --tb=short --cov=. --cov-report=xml:coverage.xml
+#           else
+#             python -m py_compile main.py
+#           fi
+
+#       - name: Build frontend test image
+#         working-directory: services/frontend
+#         run: |
+#           docker build --target builder -t rd-task-tracker-frontend-test .
+
+#   # ══════════════════════════════════════════════════════════════
+#   # API BUILD + SCAN + PUSH
+#   # ══════════════════════════════════════════════════════════════
+
+#   build-scan-push-api:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - test
+
+#     if: github.ref == 'refs/heads/main'
+
+#     steps:
+#       - name: Checkout Source
+#         uses: actions/checkout@v4
+
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v2
+#         with:
+#           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+#           aws-region: ${{ env.AWS_REGION }}
+#           role-session-name: github-actions
+
+#       - name: Login to Amazon ECR
+#         run: |
+#           aws ecr get-login-password --region $AWS_REGION | \
+#           docker login \
+#           --username AWS \
+#           --password-stdin \
+#           ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+#       - name: Set Image Tag
+#         run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+
+#       - name: Build API Docker Image
+#         run: |
+#           docker build \
+#             --target production \
+#             -t $API_IMAGE:$SHORT_SHA \
+#             -t $API_IMAGE:latest \
+#             services/api/
+
+#       - name: Scan API Image with Trivy
+#         continue-on-error: true
+#         uses: aquasecurity/trivy-action@v0.36.0
+#         with:
+#           image-ref: ${{ env.API_IMAGE }}:${{ env.SHORT_SHA }}
+#           format: table
+#           severity: HIGH,CRITICAL
+#           exit-code: 1
+
+#       - name: Push API Image
+#         run: |
+#           docker push $API_IMAGE:$SHORT_SHA
+#           docker push $API_IMAGE:latest
+
+#   # ══════════════════════════════════════════════════════════════
+#   # FRONTEND BUILD + SCAN + PUSH
+#   # ══════════════════════════════════════════════════════════════
+
+#   build-scan-push-frontend:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - test
+
+#     if: github.ref == 'refs/heads/main'
+
+#     steps:
+#       - name: Checkout Source
+#         uses: actions/checkout@v4
+
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v2
+#         with:
+#           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+#           aws-region: ${{ env.AWS_REGION }}
+#           role-session-name: github-actions
+
+#       - name: Login to Amazon ECR
+#         run: |
+#           aws ecr get-login-password --region $AWS_REGION | \
+#           docker login \
+#           --username AWS \
+#           --password-stdin \
+#           ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+#       - name: Set Image Tag
+#         run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+
+#       - name: Build Frontend Docker Image
+#         run: |
+#           docker build \
+#             --target production \
+#             -t $FRONTEND_IMAGE:$SHORT_SHA \
+#             -t $FRONTEND_IMAGE:latest \
+#             services/frontend/
+
+#       - name: Scan Frontend Image with Trivy
+#         continue-on-error: true
+#         uses: aquasecurity/trivy-action@v0.36.0
+#         with:
+#           image-ref: ${{ env.FRONTEND_IMAGE }}:${{ env.SHORT_SHA }}
+#           format: table
+#           severity: HIGH,CRITICAL
+#           exit-code: 1
+
+#       - name: Push Frontend Image
+#         run: |
+#           docker push $FRONTEND_IMAGE:$SHORT_SHA
+#           docker push $FRONTEND_IMAGE:latest
+
+#   # ══════════════════════════════════════════════════════
+#   # DEPLOY
+#   # ══════════════════════════════════════════════════════════════
+
+#   deploy-staging:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - build-scan-push-api
+#       - build-scan-push-frontend
+
+#     if: github.ref == 'refs/heads/main'
+
+#     environment:
+#       name: staging
+
+#     steps:
+#       - uses: actions/checkout@v4
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
+
+#       - name: Configure Git
+#         run: |
+#           git config user.email "github-actions@github.com"
+#           git config user.name "GitHub Actions"
+
+#       - name: Configure Git
+#         run: |
+#           git config user.email "github-actions@github.com"
+#           git config user.name "GitHub Actions"
+
+#       - name: Update Staging Helm Image Tags
+#         run: |
+#           SHORT_SHA=${GITHUB_SHA::8}
+
+#           sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-stage.yaml
+#           sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-stage.yaml
+
+#           git add helm/
+
+#           git diff --cached --quiet && exit 0
+
+#           git commit -m "ci(staging): deploy ${GITHUB_SHA::8}"
+
+#           git push origin HEAD:main
+
+          
+# ##========= Deploying to production only after successful staging deployment and manual approval.===========##
+
+#   deploy-prod:
+#     runs-on: ubuntu-latest
+
+#     needs:
+#       - deploy-staging
+
+#     if: github.ref == 'refs/heads/main'
+
+#     environment:
+#       name: prod
+
+#     steps:
+#       - uses: actions/checkout@v4
+#         with:
+#          token: ${{ secrets.GITHUB_TOKEN }}
+
+#       - name: Configure Git
+#         run: |
+#           git config user.email "github-actions@github.com"
+#           git config user.name "GitHub Actions"
+
+#       - name: Promote Same Image To Production
+#         run: |
+#           SHORT_SHA=${GITHUB_SHA::8}
+
+#           sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-prod.yaml
+#           sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-prod.yaml
+
+#           git add helm/
+
+#           git diff --cached --quiet && exit 0
+
+#           git commit -m "ci(prod): promote ${SHORT_SHA}"
+
+#           git push origin HEAD:main

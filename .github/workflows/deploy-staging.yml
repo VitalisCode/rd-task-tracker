@@ -1,0 +1,43 @@
+name: Deploy to Staging
+
+on:
+  workflow_call:
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+
+    if: github.ref == 'refs/heads/main'
+
+    environment:
+      name: staging
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Configure Git
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Update Staging Helm Image Tags
+        run: |
+          SHORT_SHA=${GITHUB_SHA::8}
+
+          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-stage.yaml
+          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-stage.yaml
+
+          git add helm/
+
+          git diff --cached --quiet && exit 0
+
+          git commit -m "ci(staging): deploy ${GITHUB_SHA::8}"
+
+          git push origin HEAD:main
