@@ -172,27 +172,29 @@ argocd version
 
 # Port-forward the UI
 kubectl port-forward svc/argocd-server -n argocd 8080:443
+
 # Open https://localhost:8080 — login with admin + password above
 
-# then login to argocd
+# then login to argocd Note make sure the argocd is running.
+
 argocd login localhost:8080 \
   --username admin \
-  --password O****Bd*DE \
+  --password 3hrhu4Oh2CWiJfyG \
   --insecure
 
 # then run to add your code repo to argocd
-argocd repo add https://gitlab.com/VitalisCode/rd-task-tracker.git \
+argocd repo add https://github.com/VitalisCode/rd-task-tracker.git \
   --username VitalisCode \
-  --password glpatTYNd****************TptZndtMw8
+  --password github_pat_11AXWSLTQ0********mhTEaBV4XKTJUf8mG8Om
 
 # Apply both ArgoCD apps
-kubectl apply -f argocd/api-app.yaml
-kubectl apply -f argocd/frontend-app.yaml
+kubectl apply -f argocd/stage/api-app.yaml
+kubectl apply -f argocd/stage/frontend-app.yaml
 
 
 # Watch them sync
 argocd app list
-argocd app get rd-api
+argocd app get rd-api-staging
 argocd app get rd-frontend
 
 

@@ -69,3 +69,36 @@ Deploy Production
 
 
 
+============================
+Validate
+   ↓
+Security Review
+   ↓
+Automated Tests
+   ↓
+Build API
+   ↓
+Build Frontend
+   ↓
+Deploy Staging
+   ↓
+Smoke Test Staging
+   ↓
+Deploy Prod
+   ↓
+Smoke Test Prod
+
+===============
+
+Deploy Staging
+    ↓
+Wait for ArgoCD Sync
+    ↓
+Verify Rollout
+    ↓
+Verify Pods Healthy
+    ↓
+Verify Service Endpoint
+    ↓
+Promote to Production
+
