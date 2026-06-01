@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  tag: f255fd4d
+  tag: 836e8671
 
 env:
   ENVIRONMENT: staging
