@@ -4,4 +4,5 @@ image:
   tag: 836e8671
 
 env:
-  ENVIRONMENT: staging
+  - name: ENVIRONMENT
+    value: staging
