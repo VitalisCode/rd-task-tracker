@@ -4,20 +4,8 @@ from typing import List, Optional
 from uuid import uuid4, UUID
 from datetime import datetime
 import logging
+import os
 import sys
-
-# import os
-
-# # Load secrets injected by Vault agent sidecar
-# # Vault writes them to /vault/secrets/api-secrets as shell exports
-# _vault_secrets_file = "/vault/secrets/api-secrets"
-# if os.path.exists(_vault_secrets_file):
-#     with open(_vault_secrets_file) as f:
-#         for line in f:
-#             line = line.strip()
-#             if line.startswith("export "):
-#                 key, _, val = line[7:].partition("=")
-#                 os.environ[key] = val.strip('"')
 
 # Structured logging for ELK
 logging.basicConfig(
@@ -27,6 +15,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Secrets like SECRET_KEY, DB_PASSWORD, and JWT_SECRET are expected to be injected
+# into the pod as environment variables by the runtime/platform.
 app = FastAPI(title="R&D Task Tracker API", version="1.0.0")
 
 # In-memory store (good enough for demo)
@@ -94,5 +84,4 @@ def delete_task(task_id: UUID):
 #         "SECRET_KEY_SET": bool(os.environ.get("SECRET_KEY")),
 #         "DB_PASSWORD_SET": bool(os.environ.get("DB_PASSWORD")),
 #         "JWT_SECRET_SET": bool(os.environ.get("JWT_SECRET")),
-#         "vault_file_exists": os.path.exists("/vault/secrets/api-secrets")
 #     }

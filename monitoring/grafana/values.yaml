@@ -39,9 +39,9 @@ dashboardProviders:
 dashboardsConfigMaps:
   default: grafana-dashboards
 
-# Admin credentials — use Vault in real life
+# Admin credentials — use AWS Secrets Manager or another secrets store in production
 adminUser: admin
-adminPassword: admin123   # override with vault secret in production
+adminPassword: admin123   # override with a managed secret in production
 
 grafana.ini:
   server:

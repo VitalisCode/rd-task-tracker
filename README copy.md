@@ -169,7 +169,6 @@ curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/download/$VERSI
 chmod +x argocd
 sudo mv argocd /usr/local/bin/
 argocd version
-
 # Port-forward the UI
 kubectl port-forward svc/argocd-server -n argocd 8080:443
 
@@ -185,7 +184,7 @@ argocd login localhost:8080 \
 # then run to add your code repo to argocd
 argocd repo add https://github.com/VitalisCode/rd-task-tracker.git \
   --username VitalisCode \
-  --password github_patSLTQ0********mhTEaBV4XK********mG8Om
+  --password github_patSLT0********aBV4X*****mG
 
 # Apply both ArgoCD apps
 kubectl apply -f argocd/stage/api-app.yaml
@@ -195,7 +194,7 @@ kubectl apply -f argocd/stage/frontend-app.yaml
 # Watch them sync
 argocd app list
 argocd app get rd-api-staging
-argocd app get rd-frontend
+argocd app get rd-frontend-staging
 
 
 =================================================================
@@ -212,76 +211,21 @@ helm version
 helm repo add hashicorp https://helm.releases.hashicorp.com
 helm repo update
 
-# Create vault namespace
-kubectl create namespace vault
+# Store secrets via AWS Secrets Manager
 
-# Install Vault in main mode for demo on the cluster via Helm
-# (in production you'd use HA mode with DynamoDB backend)
-helm install vault hashicorp/vault \
-  --namespace vault \
-  --set "server.main.enabled=true" \
-  --set "injector.enabled=true" \
-  --set "server.main.mainRootToken=root"
-# Wait for vault to be ready
-kubectl wait --for=condition=ready \
-  pod/vault-0 -n vault --timeout=60s
+## Step 1 — create the secret
+aws secretsmanager create-secret \
+  --name rd-task-tracker/api \
+  --region $AWS_REGION \
+  --secret-string '{"SECRET_KEY":"super-secret-production-key","DB_PASSWORD":"pg-pass-123","JWT_SECRET":"jwt-$(openssl rand -hex 16)"}'
 
-# Verify injector is running
-kubectl get pods -n vault
+## Step 2 — configure your deployment
+# Do not load secrets inside the app. Instead, inject these values into the
+# Kubernetes pod as environment variables when the container starts.
+# For example, use an AWS Secrets Manager to Kubernetes secret sync or injector.
 
-============
-## Step 2 — Configure Vault
-# Exec into the Vault pod
-kubectl exec -it vault-0 -n vault -- /bin/sh
+# Exporting values here is only for local testing.
+export AWS_REGION=eu-central-1
 
-# Now inside the Vault pod, run all of this:
-# Login with main root token
-vault login root
-
-# ── 1. Enable the KV secrets engine ─────────────────────────────
-vault secrets enable -path=secret kv-v2
-
-# ── 2. Write your app secrets ────────────────────────────────────
-vault kv put secret/rd-task-tracker/api \
-  secret_key="super-secret-production-key-$(date +%s)" \
-  db_password="pg-pass-$(date +%s)" \
-  jwt_secret="jwt-$(openssl rand -hex 32)"
-
-# Verify it was written
-vault kv get secret/rd-task-tracker/api
-
-# ── 3. Enable Kubernetes auth method ────────────────────────────
-vault auth enable kubernetes
-
-# ── 4. Configure K8s auth (tells Vault how to verify pod tokens) ─
-vault write auth/kubernetes/config \
-  kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
-  token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
-  kubernetes_ca_cert="@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" \
-  issuer="https://kubernetes.default.svc.cluster.local"
-
-# ── 5. Create a policy — what secrets rd-api is allowed to read ──
-vault policy write rd-api-policy - <<EOF
-path "secret/data/rd-task-tracker/api" {
-  capabilities = ["read"]
-}
-
-path "secret/data/rd-task-tracker/api/*" {
-  capabilities = ["read"]
-}
-EOF
-
-# ── 6. Create a role — binds K8s service account to the policy ───
-vault write auth/kubernetes/role/rd-api \
-  bound_service_account_names=rd-api-sa \
-  bound_service_account_namespaces=rd-staging \
-  policies=rd-api-policy \
-  ttl=1h
-
-# Verify role was created
-vault read auth/kubernetes/role/rd-api
-
-# Exit the pod
-exit
-
-================================
+# In production, have your platform inject SECRET_KEY, DB_PASSWORD, and JWT_SECRET
+# into the pod environment instead of having the app call AWS Secrets Manager.

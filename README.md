@@ -1,104 +1,132 @@
-Developer Push
-      ↓
-Linting (Ruff)
-      ↓
-Unit Tests (pytest)
-      ↓
-Security Scan
-      ↓
-SonarQube Analysis
-      ↓
-Build Docker Image
-      ↓
-Container Scan
-      ↓
-Push Image Registry
-      ↓
-Deploy to Kubernetes
+Developer Push / Pull Request
+            │
+            ▼
+ ┌─────────────────────────┐
+ │   Validation Stage      │
+ └─────────────────────────┘
+            │
+            ├── Ruff (Linting)
+            ├── Unit Tests (Pytest)
+            ├── Bandit (SAST)
+            ├── Gitleaks (Secrets Scan)
+            ├── SonarQube Analysis
+            └── Upload Reports
+            │
+            ▼
+     Manual Approval
+            │
+            ▼
+ ┌─────────────────────────┐
+ │      Build Stage        │
+ └─────────────────────────┘
+            │
+            ├── Build Docker Image
+            ├── Container Security Scan
+            │     (Trivy/Grype)
+            └── Tag Image
+            │
+            ▼
+        Push to ECR
+            │
+            ▼
+ ┌─────────────────────────┐
+ │   Staging Deployment    │
+ └─────────────────────────┘
+            │
+            ├── Update values-stage.yaml
+            ├── Commit to GitOps Repo
+            ├── ArgoCD Sync (Staging)
+            ├── Verify Rollout
+            ├── Verify Pods Healthy
+            ├── Verify Service Endpoint
+            └── Smoke Tests
+            │
+            ▼
+    Production Approval
+            │
+            ▼
+ ┌─────────────────────────┐
+ │ Production Deployment   │
+ └─────────────────────────┘
+            │
+            ├── Update values-prod.yaml
+            ├── Commit to GitOps Repo
+            ├── ArgoCD Sync (Production)
+            ├── Verify Rollout
+            ├── Verify Pods Healthy
+            ├── Verify Service Endpoint
+            └── Smoke Tests
+            │
+            ▼
+         Monitoring
+            │
+            ├── Prometheus
+            ├── Grafana
+            ├── CloudWatch
+            └── AlertManager
 
 
-===================
-
-Build Image
-     │
-     ▼
-Push Image
-     │
-     ▼
-Update values-stage.yaml
-     │
-     ▼
-ArgoCD Staging Sync
-     │
-     ▼
-GitHub Approval Required
-     │
-     ▼
-Update values-prod.yaml
-     │
-     ▼
-ArgoCD Production Sync
-
-============================
-
-Validate
-├── Ruff
-├── Bandit
-├── Gitleaks
-│
-├── Upload Reports
-│
-▼
-Manual Approval
-│
-▼
-Build Docker Images
-│
-▼
-Push to ECR
-│
-▼
-Deploy Staging
-│
-▼
-Production Approval
-│
-▼
-Deploy Production
 
 
 
 
-============================
-Validate
-   ↓
-Security Review
-   ↓
-Automated Tests
-   ↓
-Build API
-   ↓
-Build Frontend
-   ↓
-Deploy Staging
-   ↓
-Smoke Test Staging
-   ↓
-Deploy Prod
-   ↓
-Smoke Test Prod
 
-===============
 
-Deploy Staging
-    ↓
-Wait for ArgoCD Sync
-    ↓
-Verify Rollout
-    ↓
-Verify Pods Healthy
-    ↓
-Verify Service Endpoint
-    ↓
-Promote to Production
-
+Developer Push / Pull Request
+            │
+            ▼
+ ┌─────────────────────────┐
+ │   Validation Stage      │
+ └─────────────────────────┘
+            │
+            ├── Ruff (Linting)
+            ├── Unit Tests (Pytest)
+            ├── Bandit (SAST)
+            ├── Gitleaks (Secrets Scan)
+            ├── SonarQube Analysis
+            └── Upload Reports
+            │
+            ▼
+     Manual Approval
+            │
+            ▼
+ ┌─────────────────────────┐
+ │      Build Stage        │
+ └─────────────────────────┘
+            │
+            ├── Build Docker Image
+            ├── Container Security Scan
+            │     (Trivy/Grype)
+            └── Tag Image
+            │
+            ▼
+        Push to ECR
+            │
+            ▼
+ ┌─────────────────────────┐
+ │   Staging Deployment    │
+ └─────────────────────────┘
+            │
+            ├── Update values-stage.yaml
+            ├── Commit to GitOps Repo
+            ├── ArgoCD Sync (Staging)
+            ├── Verify Rollout
+            ├── Verify Pods Healthy
+            ├── Verify Service Endpoint
+            └── Smoke Tests
+            │
+            ▼
+    Production Approval
+            │
+            ▼
+ ┌─────────────────────────┐
+ │ Production Deployment   │
+ └─────────────────────────┘
+            │
+            ├── Update values-prod.yaml
+            ├── Commit to GitOps Repo
+            ├── ArgoCD Sync (Production)
+            ├── Verify Rollout
+            ├── Verify Pods Healthy
+            ├── Verify Service Endpoint
+            └── Smoke Tests
