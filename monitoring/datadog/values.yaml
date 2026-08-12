@@ -3,7 +3,7 @@ datadog:
 
   clusterName: rd-task-tracker
 
-  site: app.datadoghq.com
+  site: datadoghq.com
 
   logs:
     enabled: true
