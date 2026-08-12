@@ -11,7 +11,7 @@ project: default
 
 source:
 repoURL: https://github.com/vitaliscode/rd-task-tracker.git
-targetRevision: main
+targetRevision: ops
 path: helm/api
 helm:
 valueFiles:
