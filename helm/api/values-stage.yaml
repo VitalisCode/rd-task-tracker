@@ -1,7 +1,10 @@
 replicaCount: 1
 
 image:
-  tag: 836e8671
+  repository: 102364304164.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/api
+  tag: latest
+
+envFromSecret: rd-api-secrets
 
 env:
   - name: ENVIRONMENT

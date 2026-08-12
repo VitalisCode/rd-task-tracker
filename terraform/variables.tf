@@ -19,7 +19,7 @@ variable "cluster_name" {
 variable "cluster_version" {
   description = "Kubernetes version"
   type        = string
-  default     = "1.30"
+  default     = "1.32"
 }
 
 variable "vpc_cidr" {
@@ -49,7 +49,32 @@ variable "node_min_size" {
   type    = number
   default = 2
 }
+variable "kubernetes_namespace" {
+  description = "Kubernetes namespace for injected secrets"
+  type        = string
+  default     = "rd-staging"
+}
 
+variable "secret_key" {
+  description = "Application secret key for API service"
+  type        = string
+  default     = "changeme-secret-key"
+  sensitive   = true
+}
+
+variable "db_password" {
+  description = "Database password for API service"
+  type        = string
+  default     = "changeme-db-password"
+  sensitive   = true
+}
+
+variable "jwt_secret" {
+  description = "JWT secret for API service"
+  type        = string
+  default     = "changeme-jwt-secret"
+  sensitive   = true
+}
 variable "node_max_size" {
   type    = number
   default = 3

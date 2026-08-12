@@ -1,6 +1,6 @@
 image:
-  repository: 986232522384.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/api
-  tag: bc9c3420
+  repository: 102364304164.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/api
+  tag: latest
   pullPolicy: IfNotPresent
 
 replicaCount: 1
@@ -32,6 +32,8 @@ probes:
     path: /health
     initialDelaySeconds: 5
     periodSeconds: 10
+
+envFromSecret: rd-api-secrets
 
 env:
   - name: APP_ENV
