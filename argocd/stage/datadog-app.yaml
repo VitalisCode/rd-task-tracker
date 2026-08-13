@@ -6,14 +6,17 @@ metadata:
 spec:
   project: default
 
-  source:
-    repoURL: https://github.com/vitaliscode/rd-task-tracker.git
-    targetRevision: ops
-    path: monitoring/datadog
+  sources:
+    - repoURL: https://helm.datadoghq.com
+      chart: datadog
+      targetRevision: "3.164.0"
+      helm:
+        valueFiles:
+          - $values/monitoring/datadog/values.yaml
 
-    helm:
-      valueFiles:
-        - values.yaml
+    - repoURL: https://github.com/vitaliscode/rd-task-tracker.git
+      targetRevision: ops
+      ref: values
 
   destination:
     server: https://kubernetes.default.svc
