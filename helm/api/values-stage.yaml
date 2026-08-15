@@ -9,3 +9,17 @@ envFromSecret: rd-api-secrets-staging
 env:
   - name: ENVIRONMENT
     value: staging
+
+
+
+# replicaCount: 1
+
+# image:
+#   repository: 102364304164.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/api
+#   tag: latest
+
+# envFromSecret: rd-api-secrets-staging
+
+# env:
+#   - name: ENVIRONMENT
+#     value: staging
