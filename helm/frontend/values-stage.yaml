@@ -1,9 +1,7 @@
 replicaCount: 1
 
 image:
-
-  repository: 906462447398.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/frontend
-main
+  repository: 102364304164.dkr.ecr.eu-central-1.amazonaws.com/rd-task-tracker/frontend
   tag: latest
 
 env:
