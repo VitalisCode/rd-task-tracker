@@ -1,5 +1,5 @@
 # ─── Stage 1: Builder ────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM public.ecr.aws/docker/library/node:20-alpine AS builder
 
 # In a real project you'd build React/Vue here
 # For now we just validate the static files exist
@@ -10,7 +10,7 @@ RUN test -f html/index.html && echo "Build OK"
 
 
 ###─── Stage 2: Production Image ───────────────────────────────────────────────
-FROM nginx:1.25-alpine AS production
+FROM public.ecr.aws/docker/library/nginx:1.25-alpine AS production
 
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf

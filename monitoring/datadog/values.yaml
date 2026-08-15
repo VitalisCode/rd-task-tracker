@@ -1,0 +1,27 @@
+datadog:
+  apiKeyExistingSecret: datadog-secret
+
+  clusterName: rd-task-tracker
+
+  site: datadoghq.com
+
+  logs:
+    enabled: true
+    containerCollectAll: true
+
+  apm:
+    socketEnabled: true
+
+  processAgent:
+    enabled: true
+    processCollection: true
+
+  kubeStateMetricsEnabled: true
+
+  collectEvents: true
+
+clusterAgent:
+  enabled: true
+
+  admissionController:
+    enabled: true

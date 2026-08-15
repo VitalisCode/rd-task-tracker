@@ -1,0 +1,40 @@
+Error-Fix
+
+This file summarizes the errors fixed during the rd-task-tracker deployment and infrastructure work, with causes and resolutions.
+
+1. Docker daemon access / permission denied
+   - Cause: Docker was installed, but the current user did not have permission to access `/var/run/docker.sock`.
+   - Fix: Either run Docker commands with elevated privileges (`sudo`) or add the user to the `docker` group, then log out and log back in.
+
+2. Docker Hub image pull failures and base image availability
+   - Cause: The build environment could not reliably pull base images from Docker Hub due to network or rate-limit issues.
+   - Fix: Updated `services/api/Dockerfile` and `services/frontend/Dockerfile` to use AWS public ECR mirror base images (`public.ecr.aws/docker/library/...`) so builds could proceed without Docker Hub dependency.
+
+3. ImagePush failure while tagging/pushing local images to ECR
+   - Cause: Docker socket permission denied prevented the local Docker client from tagging and pushing images to ECR even after AWS login succeeded.
+   - Fix: Ensured Docker permissions were corrected on the build host so `docker tag` and `docker push` could complete.
+
+4. Kubernetes ImagePullBackOff due to wrong image registry/account
+   - Cause: Staging deployments were still referencing the old registry `986232522384.dkr.ecr.eu-central-1.amazonaws.com` and an unavailable tag like `836e8671`.
+   - Fix: Updated `helm/api/values-stage.yaml` and `helm/frontend/values-stage.yaml` to point to the correct registry `102364304164.dkr.ecr.eu-central-1.amazonaws.com` and the `latest` tag, then refreshed Argo CD and/or restarted deployments.
+
+5. Argo CD sync state degraded or progressing
+   - Cause: The deployed manifests did not match the targeted cluster image references, so Argo CD reported `Degraded` or `Progressing` even after application creation.
+   - Fix: Committed the corrected Helm values to Git, pushed to `main`, annotated Argo CD applications for refresh, and verified `rd-api-staging` and `rd-frontend-staging` synced successfully.
+
+6. HPA degraded due to missing metrics API
+   - Cause: The cluster did not have a metrics provider installed, so the HorizontalPodAutoscaler could not fetch `pods.metrics.k8s.io` and remained in `ScalingActive False`.
+   - Fix: Installed `metrics-server` into the cluster using the official Kubernetes metrics-server manifest, verified the deployment rolled out, and confirmed `kubectl top pods` and `kubectl describe hpa rd-api-hpa` showed CPU metrics.
+
+7. Frontend API connectivity and proxy configuration
+   - Cause: The frontend application was using a hardcoded local API URL (`http://localhost:8000`), which would not work when served from the cluster load balancer.
+   - Fix: Updated `services/frontend/html/index.html` to default `API` to a relative path (`/api`), allowing Nginx to proxy browser requests to the internal `api` service.
+
+8. Service health verification failures
+   - Cause: Initial port-forward attempts failed or were misconfigured, and the service endpoint was not reachable because the frontend/backend image mismatch prevented pods from running.
+   - Fix: Verified correct services and pods after fixing image references, and used `kubectl port-forward` properly once the cluster deployments were healthy.
+
+Summary:
+- Main issue set: build environment Docker access, ECR registry mismatch, Argo CD sync mismatch, and missing cluster metrics.
+- Resolved by fixing Docker permissions, updating Dockerfiles to use reliable base images, correcting Helm staging image settings, refreshing Argo CD, and installing `metrics-server`.
+- Final validation: both `rd-api` and `rd-frontend` pods were running, the load balancer returned HTTP 200, and the HPA could fetch CPU metrics.
