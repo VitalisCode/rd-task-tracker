@@ -1,11 +1,10 @@
+import logging
+import sys
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
-from uuid import uuid4, UUID
-from datetime import datetime
-import logging
-import os
-import sys
 
 # Structured logging for ELK
 logging.basicConfig(
@@ -24,9 +23,9 @@ tasks_db = {}
 
 class Task(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     status: str = "pending"  # pending | in_progress | done
-    project: Optional[str] = None
+    project: str | None = None
 
 class TaskResponse(Task):
     id: UUID
@@ -37,7 +36,7 @@ def health_check():
     logger.info("Health check called")
     return {"status": "healthy", "service": "api"}
 
-@app.get("/tasks", response_model=List[TaskResponse])
+@app.get("/tasks", response_model=list[TaskResponse])
 def list_tasks():
     logger.info(f"Listing {len(tasks_db)} tasks")
     return list(tasks_db.values())
@@ -45,7 +44,7 @@ def list_tasks():
 @app.post("/tasks", response_model=TaskResponse, status_code=201)
 def create_task(task: Task):
     task_id = uuid4()
-    new_task = TaskResponse(id=task_id, created_at=datetime.utcnow(), **task.dict())
+    new_task = TaskResponse(id=task_id, created_at=datetime.now(timezone.utc), **task.dict())
     tasks_db[task_id] = new_task
     logger.info(f"Created task {task_id}: {task.title}")
     return new_task
