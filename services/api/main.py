@@ -1,11 +1,10 @@
-import logging
-import sys
-from datetime import datetime, timezone
-from typing import Optional
-from uuid import UUID, uuid4
+   import logging
+   import sys
+   from datetime import datetime, timezone
+   from uuid import UUID, uuid4
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+   from fastapi import FastAPI, HTTPException
+   from pydantic import BaseModel
 
 # Structured logging for ELK
 logging.basicConfig(
