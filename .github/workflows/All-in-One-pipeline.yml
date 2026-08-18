@@ -228,86 +228,86 @@ jobs:
           docker push $FRONTEND_IMAGE:$SHORT_SHA
           docker push $FRONTEND_IMAGE:latest
 
-  # ══════════════════════════════════════════════════════
-  # DEPLOY
-  # ══════════════════════════════════════════════════════════════
+#   # ══════════════════════════════════════════════════════
+#   # DEPLOY
+#   # ══════════════════════════════════════════════════════════════
 
-  deploy-staging:
-    runs-on: ubuntu-latest
-    needs:
-      - build-scan-push-api
-      - build-scan-push-frontend
+#   deploy-staging:
+#     runs-on: ubuntu-latest
+#     needs:
+#       - build-scan-push-api
+#       - build-scan-push-frontend
 
-    if: github.ref == 'refs/heads/main'
+#     if: github.ref == 'refs/heads/main'
 
-    environment:
-      name: staging
+#     environment:
+#       name: staging
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+#     steps:
+#       - uses: actions/checkout@v4
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git
-        run: |
-          git config user.email "github-actions@github.com"
-          git config user.name "GitHub Actions"
+#       - name: Configure Git
+#         run: |
+#           git config user.email "github-actions@github.com"
+#           git config user.name "GitHub Actions"
 
-      - name: Configure Git
-        run: |
-          git config user.email "github-actions@github.com"
-          git config user.name "GitHub Actions"
+#       - name: Configure Git
+#         run: |
+#           git config user.email "github-actions@github.com"
+#           git config user.name "GitHub Actions"
 
-      - name: Update Staging Helm Image Tags
-        run: |
-          SHORT_SHA=${GITHUB_SHA::8}
+#       - name: Update Staging Helm Image Tags
+#         run: |
+#           SHORT_SHA=${GITHUB_SHA::8}
 
-          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-stage.yaml
-          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-stage.yaml
+#           sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-stage.yaml
+#           sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-stage.yaml
 
-          git add helm/
+#           git add helm/
 
-          git diff --cached --quiet && exit 0
+#           git diff --cached --quiet && exit 0
 
-          git commit -m "ci(staging): deploy ${GITHUB_SHA::8}"
+#           git commit -m "ci(staging): deploy ${GITHUB_SHA::8}"
 
-          git push origin HEAD:main
+#           git push origin HEAD:main
 
           
-##========= Deploying to production only after successful staging deployment and manual approval.===========##
+# ##========= Deploying to production only after successful staging deployment and manual approval.===========##
 
-  deploy-prod:
-    runs-on: ubuntu-latest
+#   deploy-prod:
+#     runs-on: ubuntu-latest
 
-    needs:
-      - deploy-staging
+#     needs:
+#       - deploy-staging
 
-    if: github.ref == 'refs/heads/main'
+#     if: github.ref == 'refs/heads/main'
 
-    environment:
-      name: prod
+#     environment:
+#       name: prod
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-         token: ${{ secrets.GITHUB_TOKEN }}
+#     steps:
+#       - uses: actions/checkout@v4
+#         with:
+#          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git
-        run: |
-          git config user.email "github-actions@github.com"
-          git config user.name "GitHub Actions"
+#       - name: Configure Git
+#         run: |
+#           git config user.email "github-actions@github.com"
+#           git config user.name "GitHub Actions"
 
-      - name: Promote Same Image To Production
-        run: |
-          SHORT_SHA=${GITHUB_SHA::8}
+#       - name: Promote Same Image To Production
+#         run: |
+#           SHORT_SHA=${GITHUB_SHA::8}
 
-          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-prod.yaml
-          sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-prod.yaml
+#           sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/api/values-prod.yaml
+#           sed -i -E "s|(^[[:space:]]*tag:).*|\1 ${SHORT_SHA}|" helm/frontend/values-prod.yaml
 
-          git add helm/
+#           git add helm/
 
-          git diff --cached --quiet && exit 0
+#           git diff --cached --quiet && exit 0
 
-          git commit -m "ci(prod): promote ${SHORT_SHA}"
+#           git commit -m "ci(prod): promote ${SHORT_SHA}"
 
-          git push origin HEAD:main
+#           git push origin HEAD:main
