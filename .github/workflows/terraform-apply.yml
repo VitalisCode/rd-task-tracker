@@ -1,1 +1,274 @@
-# Terraform Apply Workflow
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-apply.yml'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+
+  # ============================================================
+  # DEV
+  # ============================================================
+
+  terraform-dev:
+    name: Terraform Apply - Dev
+    if: |
+      github.event_name == 'push' ||
+      github.event.inputs.environment == 'dev'
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: dev
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+
+    steps:
+
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # AWS OIDC
+      # --------------------------------------------------------
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # --------------------------------------------------------
+      # Terraform
+      # --------------------------------------------------------
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # --------------------------------------------------------
+      # Terraform Init
+      # --------------------------------------------------------
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="backend-dev.hcl" \
+            -reconfigure
+
+      # --------------------------------------------------------
+      # Terraform Format
+      # --------------------------------------------------------
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      # --------------------------------------------------------
+      # Terraform Validate
+      # --------------------------------------------------------
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      # --------------------------------------------------------
+      # Terraform Plan
+      # --------------------------------------------------------
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -var-file="env/dev.tfvars" \
+            -out=dev.tfplan
+
+      # --------------------------------------------------------
+      # Terraform Apply
+      # --------------------------------------------------------
+
+      - name: Terraform Apply
+        run: |
+          terraform apply \
+            -auto-approve \
+            dev.tfplan
+
+      # --------------------------------------------------------
+      # Update kubeconfig
+      # --------------------------------------------------------
+
+      - name: Update EKS kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name "${{ secrets.DEV_EKS_CLUSTER_NAME }}"
+
+      # --------------------------------------------------------
+      # Verify Kubernetes access
+      # --------------------------------------------------------
+
+      - name: Verify Kubernetes cluster
+        run: |
+          kubectl get nodes
+
+      # --------------------------------------------------------
+      # Apply Kubernetes resources
+      # --------------------------------------------------------
+
+      - name: Apply Terraform Kubernetes resources
+        run: |
+          terraform plan \
+            -var-file="env/dev.tfvars" \
+            -out=dev-kubernetes.tfplan
+
+          terraform apply \
+            -auto-approve \
+            dev-kubernetes.tfplan
+
+
+  # ============================================================
+  # PROD
+  # ============================================================
+
+  terraform-prod:
+    name: Terraform Apply - Prod
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod'
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: prod
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+
+    steps:
+
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # AWS OIDC
+      # --------------------------------------------------------
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # --------------------------------------------------------
+      # Terraform
+      # --------------------------------------------------------
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # --------------------------------------------------------
+      # Terraform Init
+      # --------------------------------------------------------
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="backend-prod.hcl" \
+            -reconfigure
+
+      # --------------------------------------------------------
+      # Terraform Format
+      # --------------------------------------------------------
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      # --------------------------------------------------------
+      # Terraform Validate
+      # --------------------------------------------------------
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      # --------------------------------------------------------
+      # Terraform Plan
+      # --------------------------------------------------------
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -var-file="env/prod.tfvars" \
+            -out=prod.tfplan
+
+      # --------------------------------------------------------
+      # Terraform Apply
+      # --------------------------------------------------------
+
+      - name: Terraform Apply
+        run: |
+          terraform apply \
+            -auto-approve \
+            prod.tfplan
+
+      # --------------------------------------------------------
+      # Update kubeconfig
+      # --------------------------------------------------------
+
+      - name: Update EKS kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name "${{ secrets.PROD_EKS_CLUSTER_NAME }}"
+
+      # --------------------------------------------------------
+      # Verify Kubernetes access
+      # --------------------------------------------------------
+
+      - name: Verify Kubernetes cluster
+        run: |
+          kubectl get nodes
+
+      # --------------------------------------------------------
+      # Apply Kubernetes resources
+      # --------------------------------------------------------
+
+      - name: Apply Terraform Kubernetes resources
+        run: |
+          terraform plan \
+            -var-file="env/prod.tfvars" \
+            -out=prod-kubernetes.tfplan
+
+          terraform apply \
+            -auto-approve \
+            prod-kubernetes.tfplan

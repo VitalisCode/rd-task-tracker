@@ -1,7 +1,19 @@
 name: Terraform Plan
 
 on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-plan.yml'
+      - '.github/workflows/terraform-apply.yml'
+
   pull_request:
+    branches:
+      - main
+      - develop
     paths:
       - 'terraform/**'
       - '.github/workflows/terraform-plan.yml'
@@ -17,13 +29,6 @@ jobs:
     name: Terraform Plan
     runs-on: ubuntu-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        environment:
-          - dev
-          - prod
-
     defaults:
       run:
         working-directory: terraform
@@ -33,11 +38,43 @@ jobs:
       TF_INPUT: false
 
     steps:
+
       # -------------------------------------------------------
-      # Checkout
+      # Checkout repository
       # -------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # -------------------------------------------------------
+      # Determine Terraform environment
+      #
+      # develop -> dev
+      # main    -> prod
+      # -------------------------------------------------------
+      - name: Determine environment
+        id: environment
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BRANCH="${{ github.base_ref }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+          fi
+
+          if [[ "$BRANCH" == "develop" ]]; then
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" == "main" ]]; then
+            echo "environment=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unable to determine Terraform environment for branch: $BRANCH"
+            exit 1
+          fi
+
+      # -------------------------------------------------------
+      # Display selected environment
+      # -------------------------------------------------------
+      - name: Show Terraform environment
+        run: |
+          echo "Terraform environment: ${{ steps.environment.outputs.environment }}"
 
       # -------------------------------------------------------
       # Configure AWS credentials using GitHub OIDC
@@ -45,7 +82,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ matrix.environment == 'prod' && secrets.AWS_PROD_TERRAFORM_ROLE_ARN || secrets.AWS_DEV_TERRAFORM_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       # -------------------------------------------------------
@@ -62,11 +99,14 @@ jobs:
 
       # -------------------------------------------------------
       # Terraform Init
+      # Uses:
+      #   dev  -> backend-dev.hcl
+      #   prod -> backend-prod.hcl
       # -------------------------------------------------------
       - name: Terraform Init
         run: |
           terraform init \
-            -backend-config="backend-${{ matrix.environment }}.hcl" \
+            -backend-config="backend-${{ steps.environment.outputs.environment }}.hcl" \
             -reconfigure
 
       # -------------------------------------------------------
@@ -77,19 +117,22 @@ jobs:
 
       # -------------------------------------------------------
       # Terraform Plan
+      # Uses:
+      #   dev  -> env/dev.tfvars
+      #   prod -> env/prod.tfvars
       # -------------------------------------------------------
       - name: Terraform Plan
         run: |
           terraform plan \
-            -var-file="env/${{ matrix.environment }}.tfvars" \
-            -out="${{ matrix.environment }}.tfplan"
+            -var-file="env/${{ steps.environment.outputs.environment }}.tfvars" \
+            -out="${{ steps.environment.outputs.environment }}.tfplan"
 
       # -------------------------------------------------------
-      # Upload plan
+      # Upload Terraform Plan
       # -------------------------------------------------------
       - name: Upload Terraform Plan
         uses: actions/upload-artifact@v4
         with:
-          name: terraform-plan-${{ matrix.environment }}
-          path: terraform/${{ matrix.environment }}.tfplan
+          name: terraform-plan-${{ steps.environment.outputs.environment }}-${{ github.sha }}
+          path: terraform/${{ steps.environment.outputs.environment }}.tfplan
           retention-days: 5
