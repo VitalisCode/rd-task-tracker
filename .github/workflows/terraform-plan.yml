@@ -1,0 +1,95 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-plan.yml'
+      - '.github/workflows/terraform-apply.yml'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        environment:
+          - dev
+          - prod
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+
+    steps:
+      # -------------------------------------------------------
+      # Checkout
+      # -------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # -------------------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ matrix.environment == 'prod' && secrets.AWS_PROD_TERRAFORM_ROLE_ARN || secrets.AWS_DEV_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # -------------------------------------------------------
+      # Setup Terraform
+      # -------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # -------------------------------------------------------
+      # Terraform Format Check
+      # -------------------------------------------------------
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      # -------------------------------------------------------
+      # Terraform Init
+      # -------------------------------------------------------
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="backend-${{ matrix.environment }}.hcl" \
+            -reconfigure
+
+      # -------------------------------------------------------
+      # Terraform Validate
+      # -------------------------------------------------------
+      - name: Terraform Validate
+        run: terraform validate
+
+      # -------------------------------------------------------
+      # Terraform Plan
+      # -------------------------------------------------------
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -var-file="env/${{ matrix.environment }}.tfvars" \
+            -out="${{ matrix.environment }}.tfplan"
+
+      # -------------------------------------------------------
+      # Upload plan
+      # -------------------------------------------------------
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ matrix.environment }}
+          path: terraform/${{ matrix.environment }}.tfplan
+          retention-days: 5

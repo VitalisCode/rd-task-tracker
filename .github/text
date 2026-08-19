@@ -1,0 +1,25 @@
+Pull Request
+     │
+     ▼
+Terraform Plan
+     │
+     ├── Dev backend
+     └── Dev tfvars
+     
+Merge to main
+     │
+     ▼
+Terraform Apply
+     │
+     ├── Dev
+     │    ├── init -backend-config=backend-dev.hcl
+     │    ├── apply infrastructure
+     │    ├── update kubeconfig
+     │    └── apply Kubernetes resources
+     │
+     └── Prod
+          ├── protected GitHub Environment
+          ├── init -backend-config=backend-prod.hcl
+          ├── apply infrastructure
+          ├── update kubeconfig
+          └── apply Kubernetes resources
