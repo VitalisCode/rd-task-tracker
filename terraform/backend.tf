@@ -8,3 +8,7 @@ terraform {
     dynamodb_table = "rd-tasks-tracker-tfstate-lock" # prevents concurrent applies
   }
 }
+
+terraform {
+  backend "s3" {}
+}
