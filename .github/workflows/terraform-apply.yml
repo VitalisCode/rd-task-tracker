@@ -19,6 +19,12 @@ on:
           - dev
           - prod
 
+# Prevent two Terraform deployments from modifying
+# the same environment at the same time.
+concurrency:
+  group: terraform-${{ github.ref_name }}
+  cancel-in-progress: false
+
 permissions:
   id-token: write
   contents: read
@@ -87,84 +93,65 @@ jobs:
       # ========================================================
 
       # --------------------------------------------------------
-      # Create temporary Terraform configuration
-      #
-      # kubernetes.tf is excluded because the EKS cluster
-      # must exist before the Kubernetes provider can connect.
+      # Terraform Init
       # --------------------------------------------------------
 
-      - name: Create Terraform bootstrap configuration
-        run: |
-          rm -rf ../terraform-bootstrap
-
-          mkdir -p ../terraform-bootstrap
-
-          for file in *.tf; do
-            if [[ "$file" != "kubernetes.tf" ]]; then
-              cp "$file" ../terraform-bootstrap/
-            fi
-          done
-
-          cp -R modules ../terraform-bootstrap/
-          cp -R env ../terraform-bootstrap/
-
-      # --------------------------------------------------------
-      # Terraform Init - Bootstrap
-      # --------------------------------------------------------
-
-      - name: Terraform Init - Bootstrap
-        working-directory: terraform-bootstrap
+      - name: Terraform Init
         run: |
           terraform init \
-            -backend-config="../terraform/backend-dev.hcl" \
+            -backend-config="backend-dev.hcl" \
             -reconfigure
 
       # --------------------------------------------------------
-      # Terraform Validate - Bootstrap
+      # Terraform Validate
       # --------------------------------------------------------
 
-      - name: Terraform Validate - Bootstrap
-        working-directory: terraform-bootstrap
+      - name: Terraform Validate
         run: terraform validate
 
       # --------------------------------------------------------
-      # Terraform Plan - Bootstrap
+      # Terraform Plan - EKS Bootstrap
+      #
+      # module.eks is the EKS module in main.tf.
+      #
+      # Terraform automatically includes dependencies required
+      # by module.eks, such as VPC and IAM resources.
       # --------------------------------------------------------
 
-      - name: Terraform Plan - Bootstrap
-        working-directory: terraform-bootstrap
+      - name: Terraform Plan - EKS Bootstrap
         run: |
           terraform plan \
+            -lock-timeout=5m \
+            -target=module.eks \
             -var-file="env/dev.tfvars" \
-            -out=dev-bootstrap.tfplan
+            -out=dev-eks.tfplan
 
       # --------------------------------------------------------
-      # Terraform Apply - Bootstrap
+      # Terraform Apply - EKS Bootstrap
       # --------------------------------------------------------
 
-      - name: Terraform Apply - Bootstrap
-        working-directory: terraform-bootstrap
+      - name: Terraform Apply - EKS Bootstrap
         run: |
           terraform apply \
+            -lock-timeout=5m \
             -auto-approve \
-            dev-bootstrap.tfplan
+            dev-eks.tfplan
 
       # ========================================================
       # PHASE 2 - CONNECT TO EKS
       # ========================================================
 
       # --------------------------------------------------------
-      # Get EKS cluster name from Terraform output
+      # Get EKS cluster name
       # --------------------------------------------------------
 
       - name: Get EKS cluster name
         id: eks
-        working-directory: terraform-bootstrap
         run: |
-            EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
+          EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
 
-            echo "EKS cluster: $EKS_CLUSTER_NAME"
-            echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
+          echo "EKS cluster: $EKS_CLUSTER_NAME"
+          echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
 
       # --------------------------------------------------------
       # Update EKS kubeconfig
@@ -185,17 +172,104 @@ jobs:
           kubectl get nodes
 
       # ========================================================
-      # PHASE 3 - KUBERNETES RESOURCES
+      # PHASE 3 - FULL TERRAFORM CONFIGURATION
       # ========================================================
 
       # --------------------------------------------------------
-      # Terraform Init - Full Configuration
+      # Terraform Plan - Full Configuration
+      #
+      # EKS already exists and kubeconfig is now available.
+      # Terraform can now safely process kubernetes.tf.
+      # --------------------------------------------------------
+
+      - name: Terraform Plan - Full Configuration
+        run: |
+          terraform plan \
+            -lock-timeout=5m \
+            -var-file="env/dev.tfvars" \
+            -out=dev.tfplan
+
+      # --------------------------------------------------------
+      # Terraform Apply - Full Configuration
+      # --------------------------------------------------------
+
+      - name: Terraform Apply - Full Configuration
+        run: |
+          terraform apply \
+            -lock-timeout=5m \
+            -auto-approve \
+            dev.tfplan
+
+
+  # ============================================================
+  # PROD
+  # ============================================================
+
+  terraform-prod:
+    name: Terraform Apply - Prod
+
+    if: |
+      (github.event_name == 'push' && github.ref_name == 'main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod')
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: prod
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+
+    steps:
+
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # --------------------------------------------------------
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # --------------------------------------------------------
+      # Setup Terraform
+      # --------------------------------------------------------
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # --------------------------------------------------------
+      # Terraform Format Check
+      # --------------------------------------------------------
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      # ========================================================
+      # PHASE 1 - AWS / EKS INFRASTRUCTURE
+      # ========================================================
+
+      # --------------------------------------------------------
+      # Terraform Init
       # --------------------------------------------------------
 
       - name: Terraform Init
         run: |
           terraform init \
-            -backend-config="backend-dev.hcl" \
+            -backend-config="backend-prod.hcl" \
             -reconfigure
 
       # --------------------------------------------------------
@@ -206,219 +280,84 @@ jobs:
         run: terraform validate
 
       # --------------------------------------------------------
+      # Terraform Plan - EKS Bootstrap
+      # --------------------------------------------------------
+
+      - name: Terraform Plan - EKS Bootstrap
+        run: |
+          terraform plan \
+            -lock-timeout=5m \
+            -target=module.eks \
+            -var-file="env/prod.tfvars" \
+            -out=prod-eks.tfplan
+
+      # --------------------------------------------------------
+      # Terraform Apply - EKS Bootstrap
+      # --------------------------------------------------------
+
+      - name: Terraform Apply - EKS Bootstrap
+        run: |
+          terraform apply \
+            -lock-timeout=5m \
+            -auto-approve \
+            prod-eks.tfplan
+
+      # ========================================================
+      # PHASE 2 - CONNECT TO EKS
+      # ========================================================
+
+      # --------------------------------------------------------
+      # Get EKS cluster name
+      # --------------------------------------------------------
+
+      - name: Get EKS cluster name
+        id: eks
+        run: |
+          EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
+
+          echo "EKS cluster: $EKS_CLUSTER_NAME"
+          echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------------
+      # Update EKS kubeconfig
+      # --------------------------------------------------------
+
+      - name: Update EKS kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name "${{ steps.eks.outputs.cluster_name }}"
+
+      # --------------------------------------------------------
+      # Verify Kubernetes access
+      # --------------------------------------------------------
+
+      - name: Verify Kubernetes cluster
+        run: |
+          kubectl get nodes
+
+      # ========================================================
+      # PHASE 3 - FULL TERRAFORM CONFIGURATION
+      # ========================================================
+
+      # --------------------------------------------------------
       # Terraform Plan - Full Configuration
       # --------------------------------------------------------
 
-      - name: Terraform Plan - Kubernetes
+      - name: Terraform Plan - Full Configuration
         run: |
           terraform plan \
-            -var-file="env/dev.tfvars" \
-            -out=dev-kubernetes.tfplan
+            -lock-timeout=5m \
+            -var-file="env/prod.tfvars" \
+            -out=prod.tfplan
 
       # --------------------------------------------------------
       # Terraform Apply - Full Configuration
       # --------------------------------------------------------
 
-      - name: Terraform Apply - Kubernetes
+      - name: Terraform Apply - Full Configuration
         run: |
           terraform apply \
+            -lock-timeout=5m \
             -auto-approve \
-            dev-kubernetes.tfplan
-
-
-#   # ============================================================
-#   # PROD
-#   # ============================================================
-
-#   terraform-prod:
-#     name: Terraform Apply - Prod
-
-#     if: |
-#       (github.event_name == 'push' && github.ref_name == 'main') ||
-#       (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod')
-
-#     runs-on: ubuntu-latest
-
-#     environment:
-#       name: prod
-
-#     defaults:
-#       run:
-#         working-directory: terraform
-
-#     env:
-#       TF_IN_AUTOMATION: true
-#       TF_INPUT: false
-
-#     steps:
-
-#       # --------------------------------------------------------
-#       # Checkout
-#       # --------------------------------------------------------
-
-#       - name: Checkout repository
-#         uses: actions/checkout@v4
-
-#       # --------------------------------------------------------
-#       # Configure AWS credentials using GitHub OIDC
-#       # --------------------------------------------------------
-
-#       - name: Configure AWS credentials
-#         uses: aws-actions/configure-aws-credentials@v4
-#         with:
-#           role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
-#           aws-region: ${{ secrets.AWS_REGION }}
-
-#       # --------------------------------------------------------
-#       # Setup Terraform
-#       # --------------------------------------------------------
-
-#       - name: Setup Terraform
-#         uses: hashicorp/setup-terraform@v3
-
-#       # --------------------------------------------------------
-#       # Terraform Format Check
-#       # --------------------------------------------------------
-
-#       - name: Terraform Format Check
-#         run: terraform fmt -check -recursive
-
-#       # ========================================================
-#       # PHASE 1 - AWS / EKS INFRASTRUCTURE
-#       # ========================================================
-
-#       # --------------------------------------------------------
-#       # Create temporary Terraform configuration
-#       # --------------------------------------------------------
-
-#       - name: Create Terraform bootstrap configuration
-#         run: |
-#           rm -rf ../terraform-bootstrap
-
-#           mkdir -p ../terraform-bootstrap
-
-#           for file in *.tf; do
-#             if [[ "$file" != "kubernetes.tf" ]]; then
-#               cp "$file" ../terraform-bootstrap/
-#             fi
-#           done
-
-#           cp -R modules ../terraform-bootstrap/
-#           cp -R env ../terraform-bootstrap/
-
-#       # --------------------------------------------------------
-#       # Terraform Init - Bootstrap
-#       # --------------------------------------------------------
-
-#       - name: Terraform Init - Bootstrap
-#         working-directory: terraform-bootstrap
-#         run: |
-#           terraform init \
-#             -backend-config="../terraform/backend-prod.hcl" \
-#             -reconfigure
-
-#       # --------------------------------------------------------
-#       # Terraform Validate - Bootstrap
-#       # --------------------------------------------------------
-
-#       - name: Terraform Validate - Bootstrap
-#         working-directory: terraform-bootstrap
-#         run: terraform validate
-
-#       # --------------------------------------------------------
-#       # Terraform Plan - Bootstrap
-#       # --------------------------------------------------------
-
-#       - name: Terraform Plan - Bootstrap
-#         working-directory: terraform-bootstrap
-#         run: |
-#           terraform plan \
-#             -var-file="env/prod.tfvars" \
-#             -out=prod-bootstrap.tfplan
-
-#       # --------------------------------------------------------
-#       # Terraform Apply - Bootstrap
-#       # --------------------------------------------------------
-
-#       - name: Terraform Apply - Bootstrap
-#         working-directory: terraform-bootstrap
-#         run: |
-#           terraform apply \
-#             -auto-approve \
-#             prod-bootstrap.tfplan
-
-#       # ========================================================
-#       # PHASE 2 - CONNECT TO EKS
-#       # ========================================================
-
-#       # --------------------------------------------------------
-#       # Get EKS cluster name
-#       # --------------------------------------------------------
-
-#       - name: Get EKS cluster name
-#         id: eks
-#         working-directory: terraform-bootstrap
-#         run: |
-#           EKS_CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
-
-#           echo "EKS cluster: $EKS_CLUSTER_NAME"
-#           echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
-
-#       # --------------------------------------------------------
-#       # Update EKS kubeconfig
-#       # --------------------------------------------------------
-
-#       - name: Update EKS kubeconfig
-#         run: |
-#           aws eks update-kubeconfig \
-#             --region "${{ secrets.AWS_REGION }}" \
-#             --name "${{ steps.eks.outputs.cluster_name }}"
-
-#       # --------------------------------------------------------
-#       # Verify Kubernetes access
-#       # --------------------------------------------------------
-
-#       - name: Verify Kubernetes cluster
-#         run: |
-#           kubectl get nodes
-
-#       # ========================================================
-#       # PHASE 3 - KUBERNETES RESOURCES
-#       # ========================================================
-
-#       # --------------------------------------------------------
-#       # Terraform Init - Full Configuration
-#       # --------------------------------------------------------
-
-#       - name: Terraform Init
-#         run: |
-#           terraform init \
-#             -backend-config="backend-prod.hcl" \
-#             -reconfigure
-
-#       # --------------------------------------------------------
-#       # Terraform Validate
-#       # --------------------------------------------------------
-
-#       - name: Terraform Validate
-#         run: terraform validate
-
-#       # --------------------------------------------------------
-#       # Terraform Plan - Full Configuration
-#       # --------------------------------------------------------
-
-#       - name: Terraform Plan - Kubernetes
-#         run: |
-#           terraform plan \
-#             -var-file="env/prod.tfvars" \
-#             -out=prod-kubernetes.tfplan
-
-#       # --------------------------------------------------------
-#       # Terraform Apply - Full Configuration
-#       # --------------------------------------------------------
-
-#       - name: Terraform Apply - Kubernetes
-#         run: |
-#           terraform apply \
-#             -auto-approve \
-#             prod-kubernetes.tfplan
+            prod.tfplan
