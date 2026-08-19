@@ -23,3 +23,31 @@ Terraform Apply
           ├── apply infrastructure
           ├── update kubeconfig
           └── apply Kubernetes resources
+
+
+                 Git Push
+                    │
+             ┌──────┴──────┐
+             │             │
+         develop          main
+             │             │
+             ▼             ▼
+           DEV           PROD
+             │             │
+      backend-dev.hcl  backend-prod.hcl
+      dev.tfvars       prod.tfvars
+             │             │
+             ▼             ▼
+      Terraform Apply  Terraform Apply
+             │             │
+             ▼             ▼
+            EKS           EKS
+             │             │
+             ▼             ▼
+      Get EKS output  Get EKS output
+             │             │
+             ▼             ▼
+      update-kubeconfig
+             │             │
+             ▼             ▼
+      Kubernetes resources
