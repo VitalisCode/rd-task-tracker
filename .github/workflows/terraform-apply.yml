@@ -154,17 +154,17 @@ jobs:
       # ========================================================
 
       # --------------------------------------------------------
-      # Get EKS cluster name
+      # Get EKS cluster name from Terraform output
       # --------------------------------------------------------
 
       - name: Get EKS cluster name
         id: eks
         working-directory: terraform-bootstrap
         run: |
-          EKS_CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
+            EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
 
-          echo "EKS cluster: $EKS_CLUSTER_NAME"
-          echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
+            echo "EKS cluster: $EKS_CLUSTER_NAME"
+            echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
 
       # --------------------------------------------------------
       # Update EKS kubeconfig
