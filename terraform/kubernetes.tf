@@ -10,7 +10,7 @@ resource "kubernetes_namespace" "app" {
 }
 
 resource "kubernetes_secret" "rd_api_secrets" {
-  depends_on = [kubernetes_namespace.app]  #depends_on = [time_sleep.wait_for_eks, kubernetes_namespace.app]
+  depends_on = [kubernetes_namespace.app] #depends_on = [time_sleep.wait_for_eks, kubernetes_namespace.app]
 
   metadata {
     name      = "rd-api-secrets-staging"
