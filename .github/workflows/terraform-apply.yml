@@ -201,163 +201,163 @@ jobs:
             dev.tfplan
 
 
-  # ============================================================
-  # PROD
-  # ============================================================
+  # # ============================================================
+  # # PROD
+  # # ============================================================
 
-  terraform-prod:
-    name: Terraform Apply - Prod
+  # terraform-prod:
+  #   name: Terraform Apply - Prod
 
-    if: |
-      (github.event_name == 'push' && github.ref_name == 'main') ||
-      (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod')
+  #   if: |
+  #     (github.event_name == 'push' && github.ref_name == 'main') ||
+  #     (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod')
 
-    runs-on: ubuntu-latest
+  #   runs-on: ubuntu-latest
 
-    environment:
-      name: prod
+  #   environment:
+  #     name: prod
 
-    defaults:
-      run:
-        working-directory: terraform
+  #   defaults:
+  #     run:
+  #       working-directory: terraform
 
-    env:
-      TF_IN_AUTOMATION: true
-      TF_INPUT: false
+  #   env:
+  #     TF_IN_AUTOMATION: true
+  #     TF_INPUT: false
 
-    steps:
+  #   steps:
 
-      # --------------------------------------------------------
-      # Checkout
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Checkout
+  #     # --------------------------------------------------------
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
 
-      # --------------------------------------------------------
-      # Configure AWS credentials using GitHub OIDC
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Configure AWS credentials using GitHub OIDC
+  #     # --------------------------------------------------------
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v4
+  #       with:
+  #         role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+  #         aws-region: ${{ secrets.AWS_REGION }}
 
-      # --------------------------------------------------------
-      # Setup Terraform
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Setup Terraform
+  #     # --------------------------------------------------------
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+  #     - name: Setup Terraform
+  #       uses: hashicorp/setup-terraform@v3
 
-      # --------------------------------------------------------
-      # Terraform Format Check
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Terraform Format Check
+  #     # --------------------------------------------------------
 
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+  #     - name: Terraform Format Check
+  #       run: terraform fmt -check -recursive
 
-      # ========================================================
-      # PHASE 1 - AWS / EKS INFRASTRUCTURE
-      # ========================================================
+  #     # ========================================================
+  #     # PHASE 1 - AWS / EKS INFRASTRUCTURE
+  #     # ========================================================
 
-      # --------------------------------------------------------
-      # Terraform Init
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Terraform Init
+  #     # --------------------------------------------------------
 
-      - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="backend-prod.hcl" \
-            -reconfigure
+  #     - name: Terraform Init
+  #       run: |
+  #         terraform init \
+  #           -backend-config="backend-prod.hcl" \
+  #           -reconfigure
 
-      # --------------------------------------------------------
-      # Terraform Validate
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Terraform Validate
+  #     # --------------------------------------------------------
 
-      - name: Terraform Validate
-        run: terraform validate
+  #     - name: Terraform Validate
+  #       run: terraform validate
 
-      # --------------------------------------------------------
-      # Terraform Plan - EKS Bootstrap
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Terraform Plan - EKS Bootstrap
+  #     # --------------------------------------------------------
 
-      - name: Terraform Plan - EKS Bootstrap
-        run: |
-          terraform plan \
-            -lock-timeout=5m \
-            -target=module.eks \
-            -var-file="envs/prod.tfvars" \
-            -out=prod-eks.tfplan
+  #     - name: Terraform Plan - EKS Bootstrap
+  #       run: |
+  #         terraform plan \
+  #           -lock-timeout=5m \
+  #           -target=module.eks \
+  #           -var-file="envs/prod.tfvars" \
+  #           -out=prod-eks.tfplan
 
-      # --------------------------------------------------------
-      # Terraform Apply - EKS Bootstrap
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Terraform Apply - EKS Bootstrap
+  #     # --------------------------------------------------------
 
-      - name: Terraform Apply - EKS Bootstrap
-        run: |
-          terraform apply \
-            -lock-timeout=5m \
-            -auto-approve \
-            prod-eks.tfplan
+  #     - name: Terraform Apply - EKS Bootstrap
+  #       run: |
+  #         terraform apply \
+  #           -lock-timeout=5m \
+  #           -auto-approve \
+  #           prod-eks.tfplan
 
-      # ========================================================
-      # PHASE 2 - CONNECT TO EKS
-      # ========================================================
+  #     # ========================================================
+  #     # PHASE 2 - CONNECT TO EKS
+  #     # ========================================================
 
-      # --------------------------------------------------------
-      # Get EKS cluster name
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Get EKS cluster name
+  #     # --------------------------------------------------------
 
-      - name: Get EKS cluster name
-        id: eks
-        run: |
-          EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
+  #     - name: Get EKS cluster name
+  #       id: eks
+  #       run: |
+  #         EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
 
-          echo "EKS cluster: $EKS_CLUSTER_NAME"
-          echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
+  #         echo "EKS cluster: $EKS_CLUSTER_NAME"
+  #         echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
 
-      # --------------------------------------------------------
-      # Update EKS kubeconfig
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Update EKS kubeconfig
+  #     # --------------------------------------------------------
 
-      - name: Update EKS kubeconfig
-        run: |
-          aws eks update-kubeconfig \
-            --region "${{ secrets.AWS_REGION }}" \
-            --name "${{ steps.eks.outputs.cluster_name }}"
+  #     - name: Update EKS kubeconfig
+  #       run: |
+  #         aws eks update-kubeconfig \
+  #           --region "${{ secrets.AWS_REGION }}" \
+  #           --name "${{ steps.eks.outputs.cluster_name }}"
 
-      # --------------------------------------------------------
-      # Verify Kubernetes access
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Verify Kubernetes access
+  #     # --------------------------------------------------------
 
-      - name: Verify Kubernetes cluster
-        run: |
-          kubectl get nodes
+  #     - name: Verify Kubernetes cluster
+  #       run: |
+  #         kubectl get nodes
 
-      # ========================================================
-      # PHASE 3 - FULL TERRAFORM CONFIGURATION
-      # ========================================================
+  #     # ========================================================
+  #     # PHASE 3 - FULL TERRAFORM CONFIGURATION
+  #     # ========================================================
 
-      # --------------------------------------------------------
-      # Terraform Plan - Full Configuration
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Terraform Plan - Full Configuration
+  #     # --------------------------------------------------------
 
-      - name: Terraform Plan - Full Configuration
-        run: |
-          terraform plan \
-            -lock-timeout=5m \
-            -var-file="envs/prod.tfvars" \
-            -out=prod.tfplan
+  #     - name: Terraform Plan - Full Configuration
+  #       run: |
+  #         terraform plan \
+  #           -lock-timeout=5m \
+  #           -var-file="envs/prod.tfvars" \
+  #           -out=prod.tfplan
 
-      # --------------------------------------------------------
-      # Terraform Apply - Full Configuration
-      # --------------------------------------------------------
+  #     # --------------------------------------------------------
+  #     # Terraform Apply - Full Configuration
+  #     # --------------------------------------------------------
 
-      - name: Terraform Apply - Full Configuration
-        run: |
-          terraform apply \
-            -lock-timeout=5m \
-            -auto-approve \
-            prod.tfplan
+  #     - name: Terraform Apply - Full Configuration
+  #       run: |
+  #         terraform apply \
+  #           -lock-timeout=5m \
+  #           -auto-approve \
+  #           prod.tfplan
