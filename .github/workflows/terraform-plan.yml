@@ -168,7 +168,7 @@ jobs:
         run: |
           terraform plan \
             -lock-timeout=5m \
-            -var-file="env/${{ steps.environment.outputs.environment }}.tfvars" \
+            -var-file="envs/${{ steps.environment.outputs.environment }}.tfvars" \
             -out="${{ steps.environment.outputs.environment }}.tfplan"
 
       # -------------------------------------------------------
