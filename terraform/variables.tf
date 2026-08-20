@@ -5,9 +5,9 @@ variable "aws_region" {
 }
 
 variable "environment" {
-  description = "Deployment environment (staging | production)"
+  description = "Deployment environment (dev | prod)"
   type        = string
-  default     = "staging"
+  default     = "dev"
 }
 
 variable "cluster_name" {
@@ -52,7 +52,7 @@ variable "node_min_size" {
 variable "kubernetes_namespace" {
   description = "Kubernetes namespace for injected secrets"
   type        = string
-  default     = "rd-staging"
+  default     = "rd-dev"
 }
 
 variable "secret_key" {

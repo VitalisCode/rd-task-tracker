@@ -1,0 +1,104 @@
+Developer Push
+      ↓
+Linting (Ruff)
+      ↓
+Unit Tests (pytest)
+      ↓
+Security Scan
+      ↓
+SonarQube Analysis
+      ↓
+Build Docker Image
+      ↓
+Container Scan
+      ↓
+Push Image Registry
+      ↓
+Deploy to Kubernetes
+
+
+===================
+
+Build Image
+     │
+     ▼
+Push Image
+     │
+     ▼
+Update values-stage.yaml
+     │
+     ▼
+ArgoCD Staging Sync
+     │
+     ▼
+GitHub Approval Required
+     │
+     ▼
+Update values-prod.yaml
+     │
+     ▼
+ArgoCD Production Sync
+
+============================
+
+Validate
+├── Ruff
+├── Bandit
+├── Gitleaks
+│
+├── Upload Reports
+│
+▼
+Manual Approval
+│
+▼
+Build Docker Images
+│
+▼
+Push to ECR
+│
+▼
+Deploy Staging
+│
+▼
+Production Approval
+│
+▼
+Deploy Production
+
+
+
+
+============================
+Validate
+   ↓
+Security Review
+   ↓
+Automated Tests
+   ↓
+Build API
+   ↓
+Build Frontend
+   ↓
+Deploy Staging
+   ↓
+Smoke Test Staging
+   ↓
+Deploy Prod
+   ↓
+Smoke Test Prod
+
+===============
+
+Deploy Staging
+    ↓
+Wait for ArgoCD Sync
+    ↓
+Verify Rollout
+    ↓
+Verify Pods Healthy
+    ↓
+Verify Service Endpoint
+    ↓
+Promote to Production
+

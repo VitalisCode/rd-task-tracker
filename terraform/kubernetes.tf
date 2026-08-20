@@ -2,13 +2,7 @@
 # This file should be applied only after the EKS cluster is created and
 # the kubeconfig has been updated.
 
-# resource "time_sleep" "wait_for_eks" {
-#   depends_on = [module.eks]
-#   create_duration = "600s"
-# }
-
 resource "kubernetes_namespace" "app" {
-  # depends_on = [time_sleep.wait_for_eks]
 
   metadata {
     name = var.kubernetes_namespace
@@ -16,10 +10,10 @@ resource "kubernetes_namespace" "app" {
 }
 
 resource "kubernetes_secret" "rd_api_secrets" {
-  depends_on = [kubernetes_namespace.app]  #depends_on = [time_sleep.wait_for_eks, kubernetes_namespace.app]
+  depends_on = [kubernetes_namespace.app] #depends_on = [time_sleep.wait_for_eks, kubernetes_namespace.app]
 
   metadata {
-    name      = "rd-api-secrets-staging"
+    name      = "rd-api-secret-staging"
     namespace = kubernetes_namespace.app.metadata[0].name
   }
 

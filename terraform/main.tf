@@ -26,7 +26,7 @@ module "eks" {
   environment        = var.environment
 }
 resource "aws_secretsmanager_secret" "rd_api_secrets" {
-  name        = "rd-api-secrets-${var.environment}"
+  name        = "rd-api-secret-${var.environment}"
   description = "Secrets for rd-api service stored in AWS Secrets Manager"
   tags = {
     Project     = "rd-task-tracker"

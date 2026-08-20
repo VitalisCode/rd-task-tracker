@@ -6,9 +6,9 @@ resource "aws_eks_cluster" "main" {
 
   vpc_config {
     subnet_ids              = concat(var.private_subnet_ids, var.public_subnet_ids)
-    endpoint_private_access = true    # Nodes talk to control plane privately
-    endpoint_public_access  = true    # You can kubectl from your laptop
-    public_access_cidrs     = ["0.0.0.0/0"]  # Lock this down in production
+    endpoint_private_access = true          # Nodes talk to control plane privately
+    endpoint_public_access  = true          # You can kubectl from your laptop
+    public_access_cidrs     = ["0.0.0.0/0"] # Lock this down in production
   }
 
   # Enable control plane logging to CloudWatch
@@ -24,7 +24,7 @@ resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.cluster_name}-nodes"
   node_role_arn   = var.node_role_arn
-  subnet_ids      = var.private_subnet_ids   # Nodes in private subnets only
+  subnet_ids      = var.private_subnet_ids # Nodes in private subnets only
 
   instance_types = [var.node_instance_type]
 
@@ -35,13 +35,13 @@ resource "aws_eks_node_group" "main" {
   }
 
   update_config {
-    max_unavailable = 1    # Rolling update — always keep n-1 nodes running
+    max_unavailable = 1 # Rolling update — always keep n-1 nodes running
   }
 
   # Use latest EKS-optimised Amazon Linux 2 AMI
-  ami_type       = "AL2_x86_64"
-  capacity_type  = "ON_DEMAND"
-  disk_size      = 20
+  ami_type      = "AL2_x86_64"
+  capacity_type = "ON_DEMAND"
+  disk_size     = 20
 
   labels = {
     environment = var.environment
@@ -49,7 +49,7 @@ resource "aws_eks_node_group" "main" {
   }
 
   lifecycle {
-    ignore_changes = [scaling_config[0].desired_size]  # Let cluster autoscaler manage this
+    ignore_changes = [scaling_config[0].desired_size] # Let cluster autoscaler manage this
   }
 }
 

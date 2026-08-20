@@ -1,0 +1,183 @@
+name: Terraform Plan
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-plan.yml'
+      - '.github/workflows/terraform-apply.yml'
+
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-plan.yml'
+      - '.github/workflows/terraform-apply.yml'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-plan-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+
+    steps:
+
+      # -------------------------------------------------------
+      # Checkout
+      # -------------------------------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # -------------------------------------------------------
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # -------------------------------------------------------
+      # Setup Terraform
+      # -------------------------------------------------------
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # -------------------------------------------------------
+      # Determine Terraform environment
+      #
+      # develop -> dev
+      # main    -> prod
+      # -------------------------------------------------------
+
+      - name: Determine environment
+        id: environment
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BRANCH="${{ github.base_ref }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+          fi
+
+          if [[ "$BRANCH" == "develop" ]]; then
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" == "main" ]]; then
+            echo "environment=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unable to determine Terraform environment"
+            exit 1
+          fi
+
+      # -------------------------------------------------------
+      # Show selected environment
+      # -------------------------------------------------------
+
+      - name: Show Terraform environment
+        run: |
+          echo "Terraform environment: ${{ steps.environment.outputs.environment }}"
+
+      # -------------------------------------------------------
+      # Terraform Format Check
+      # -------------------------------------------------------
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      # -------------------------------------------------------
+      # Terraform Init
+      # -------------------------------------------------------
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="backend-${{ steps.environment.outputs.environment }}.hcl" \
+            -reconfigure
+
+      # -------------------------------------------------------
+      # Terraform Validate
+      # -------------------------------------------------------
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      # =======================================================
+      # CONNECT TO EXISTING EKS
+      # =======================================================
+
+      # -------------------------------------------------------
+      # Get EKS cluster name
+      # -------------------------------------------------------
+
+      - name: Get EKS cluster name
+        id: eks
+        run: |
+          EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
+
+          echo "EKS cluster: $EKS_CLUSTER_NAME"
+          echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
+
+      # -------------------------------------------------------
+      # Update kubeconfig
+      # -------------------------------------------------------
+
+      - name: Update EKS kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name "${{ steps.eks.outputs.cluster_name }}"
+
+      # -------------------------------------------------------
+      # Verify Kubernetes access
+      # -------------------------------------------------------
+
+      - name: Verify Kubernetes cluster
+        run: |
+          kubectl get nodes
+          kubectl get namespaces
+
+      # =======================================================
+      # TERRAFORM PLAN
+      # =======================================================
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -lock-timeout=5m \
+            -var-file="envs/${{ steps.environment.outputs.environment }}.tfvars" \
+            -out="${{ steps.environment.outputs.environment }}.tfplan"
+
+      # -------------------------------------------------------
+      # Upload Terraform Plan
+      # -------------------------------------------------------
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ steps.environment.outputs.environment }}-${{ github.sha }}
+          path: terraform/${{ steps.environment.outputs.environment }}.tfplan
+          retention-days: 5
