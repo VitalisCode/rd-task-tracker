@@ -24,7 +24,12 @@ permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: terraform-plan-${{ github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
+
   terraform-plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
@@ -40,10 +45,28 @@ jobs:
     steps:
 
       # -------------------------------------------------------
-      # Checkout repository
+      # Checkout
       # -------------------------------------------------------
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # -------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # -------------------------------------------------------
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # -------------------------------------------------------
+      # Setup Terraform
+      # -------------------------------------------------------
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
       # -------------------------------------------------------
       # Determine Terraform environment
@@ -51,6 +74,7 @@ jobs:
       # develop -> dev
       # main    -> prod
       # -------------------------------------------------------
+
       - name: Determine environment
         id: environment
         run: |
@@ -65,44 +89,29 @@ jobs:
           elif [[ "$BRANCH" == "main" ]]; then
             echo "environment=prod" >> "$GITHUB_OUTPUT"
           else
-            echo "Unable to determine Terraform environment for branch: $BRANCH"
+            echo "Unable to determine Terraform environment"
             exit 1
           fi
 
       # -------------------------------------------------------
-      # Display selected environment
+      # Show selected environment
       # -------------------------------------------------------
+
       - name: Show Terraform environment
         run: |
           echo "Terraform environment: ${{ steps.environment.outputs.environment }}"
 
       # -------------------------------------------------------
-      # Configure AWS credentials using GitHub OIDC
-      # -------------------------------------------------------
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      # -------------------------------------------------------
-      # Setup Terraform
-      # -------------------------------------------------------
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      # -------------------------------------------------------
       # Terraform Format Check
       # -------------------------------------------------------
+
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
       # -------------------------------------------------------
       # Terraform Init
-      # Uses:
-      #   dev  -> backend-dev.hcl
-      #   prod -> backend-prod.hcl
       # -------------------------------------------------------
+
       - name: Terraform Init
         run: |
           terraform init \
@@ -112,24 +121,60 @@ jobs:
       # -------------------------------------------------------
       # Terraform Validate
       # -------------------------------------------------------
+
       - name: Terraform Validate
         run: terraform validate
 
+      # =======================================================
+      # CONNECT TO EXISTING EKS
+      # =======================================================
+
       # -------------------------------------------------------
-      # Terraform Plan
-      # Uses:
-      #   dev  -> envs/dev.tfvars
-      #   prod -> envs/prod.tfvars
+      # Get EKS cluster name
       # -------------------------------------------------------
+
+      - name: Get EKS cluster name
+        id: eks
+        run: |
+          EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
+
+          echo "EKS cluster: $EKS_CLUSTER_NAME"
+          echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
+
+      # -------------------------------------------------------
+      # Update kubeconfig
+      # -------------------------------------------------------
+
+      - name: Update EKS kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name "${{ steps.eks.outputs.cluster_name }}"
+
+      # -------------------------------------------------------
+      # Verify Kubernetes access
+      # -------------------------------------------------------
+
+      - name: Verify Kubernetes cluster
+        run: |
+          kubectl get nodes
+          kubectl get namespaces
+
+      # =======================================================
+      # TERRAFORM PLAN
+      # =======================================================
+
       - name: Terraform Plan
         run: |
           terraform plan \
-            -var-file="envs/${{ steps.environment.outputs.environment }}.tfvars" \
+            -lock-timeout=5m \
+            -var-file="env/${{ steps.environment.outputs.environment }}.tfvars" \
             -out="${{ steps.environment.outputs.environment }}.tfplan"
 
       # -------------------------------------------------------
       # Upload Terraform Plan
       # -------------------------------------------------------
+
       - name: Upload Terraform Plan
         uses: actions/upload-artifact@v4
         with:
