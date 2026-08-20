@@ -1,0 +1,207 @@
+name: Terraform Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+      confirmation:
+        description: 'Type DESTROY to confirm'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+# Prevent destroy from running at the same time as
+# another Terraform operation for the same environment.
+concurrency:
+  group: terraform-destroy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+
+  # ============================================================
+  # DESTROY
+  # ============================================================
+
+  terraform-destroy:
+
+    name: Terraform Destroy - ${{ inputs.environment }}
+
+    if: inputs.confirmation == 'DESTROY'
+
+    runs-on: ubuntu-latest
+
+    # GitHub Environment
+    #
+    # If you configure approval on the "prod" environment,
+    # GitHub will require approval before this job runs.
+    environment:
+      name: ${{ inputs.environment }}
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+
+    steps:
+
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # --------------------------------------------------------
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # --------------------------------------------------------
+      # Setup Terraform
+      # --------------------------------------------------------
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # --------------------------------------------------------
+      # Terraform Format Check
+      # --------------------------------------------------------
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      # ========================================================
+      # PHASE 1 - INITIALIZE TERRAFORM
+      # ========================================================
+
+      # --------------------------------------------------------
+      # Terraform Init
+      #
+      # Automatically selects:
+      #
+      # dev  -> backend-dev.hcl
+      # prod -> backend-prod.hcl
+      # --------------------------------------------------------
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="backend-${{ inputs.environment }}.hcl" \
+            -reconfigure
+
+      # --------------------------------------------------------
+      # Terraform Validate
+      # --------------------------------------------------------
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      # ========================================================
+      # PHASE 2 - CONNECT TO EKS
+      # ========================================================
+
+      # --------------------------------------------------------
+      # Get EKS cluster name
+      #
+      # Your Terraform output is:
+      #
+      # output "cluster_name"
+      # --------------------------------------------------------
+
+      - name: Get EKS cluster name
+        id: eks
+        run: |
+          EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)
+
+          echo "EKS cluster: $EKS_CLUSTER_NAME"
+          echo "cluster_name=$EKS_CLUSTER_NAME" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------------
+      # Update EKS kubeconfig
+      # --------------------------------------------------------
+
+      - name: Update EKS kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name "${{ steps.eks.outputs.cluster_name }}"
+
+      # --------------------------------------------------------
+      # Verify Kubernetes access
+      # --------------------------------------------------------
+
+      - name: Verify Kubernetes cluster
+        run: |
+          kubectl get nodes
+
+      # ========================================================
+      # PHASE 3 - TERRAFORM DESTROY PLAN
+      # ========================================================
+
+      # --------------------------------------------------------
+      # Terraform Destroy Plan
+      #
+      # This does NOT destroy anything yet.
+      # It creates a plan showing what will be destroyed.
+      # --------------------------------------------------------
+
+      - name: Terraform Destroy Plan
+        run: |
+          terraform plan \
+            -destroy \
+            -lock-timeout=5m \
+            -var-file="envs/${{ inputs.environment }}.tfvars" \
+            -out="${{ inputs.environment }}-destroy.tfplan"
+
+      # --------------------------------------------------------
+      # Terraform Destroy Plan Summary
+      # --------------------------------------------------------
+
+      - name: Show Destroy Plan
+        run: |
+          terraform show \
+            -no-color \
+            "${{ inputs.environment }}-destroy.tfplan"
+
+      # ========================================================
+      # PHASE 4 - DESTROY
+      # ========================================================
+
+      # --------------------------------------------------------
+      # Terraform Destroy
+      #
+      # The saved plan is applied exactly as planned.
+      # --------------------------------------------------------
+
+      - name: Terraform Destroy
+        run: |
+          terraform apply \
+            -lock-timeout=5m \
+            -auto-approve \
+            "${{ inputs.environment }}-destroy.tfplan"
+
+      # --------------------------------------------------------
+      # Verify Destroy
+      # --------------------------------------------------------
+
+      - name: Verify Terraform State
+        run: |
+          terraform state list

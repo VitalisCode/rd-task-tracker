@@ -118,13 +118,13 @@ jobs:
       # -------------------------------------------------------
       # Terraform Plan
       # Uses:
-      #   dev  -> env/dev.tfvars
-      #   prod -> env/prod.tfvars
+      #   dev  -> envs/dev.tfvars
+      #   prod -> envs/prod.tfvars
       # -------------------------------------------------------
       - name: Terraform Plan
         run: |
           terraform plan \
-            -var-file="env/${{ steps.environment.outputs.environment }}.tfvars" \
+            -var-file="envs/${{ steps.environment.outputs.environment }}.tfvars" \
             -out="${{ steps.environment.outputs.environment }}.tfplan"
 
       # -------------------------------------------------------

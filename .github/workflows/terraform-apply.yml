@@ -123,7 +123,7 @@ jobs:
           terraform plan \
             -lock-timeout=5m \
             -target=module.eks \
-            -var-file="env/dev.tfvars" \
+            -var-file="envs/dev.tfvars" \
             -out=dev-eks.tfplan
 
       # --------------------------------------------------------
@@ -186,7 +186,7 @@ jobs:
         run: |
           terraform plan \
             -lock-timeout=5m \
-            -var-file="env/dev.tfvars" \
+            -var-file="envs/dev.tfvars" \
             -out=dev.tfplan
 
       # --------------------------------------------------------
@@ -288,7 +288,7 @@ jobs:
           terraform plan \
             -lock-timeout=5m \
             -target=module.eks \
-            -var-file="env/prod.tfvars" \
+            -var-file="envs/prod.tfvars" \
             -out=prod-eks.tfplan
 
       # --------------------------------------------------------
@@ -348,7 +348,7 @@ jobs:
         run: |
           terraform plan \
             -lock-timeout=5m \
-            -var-file="env/prod.tfvars" \
+            -var-file="envs/prod.tfvars" \
             -out=prod.tfplan
 
       # --------------------------------------------------------
